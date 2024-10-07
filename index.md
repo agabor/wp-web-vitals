@@ -1,6 +1,6 @@
 ---
 layout: default
-title: Pause Timer
+title: WP Web Vitals
 ---
 
 {% include_relative README.md %}
