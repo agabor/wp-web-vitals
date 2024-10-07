@@ -1,0 +1,31 @@
+# Basic settings
+title: WP Web Vitals
+description: Collect Anonyme Web Vitals Data from WordPress Sites
+theme: jekyll-theme-cayman
+
+# Repository settings (for GitHub Pages)
+repository: agabor/wp-web-vitals
+
+# Social links
+github_username: agabor
+
+# Show your site's title in the header
+show_title: true
+
+# Enable Google Analytics (optional)
+# google_analytics: UA-XXXXXXXX-X
+
+# Markdown settings
+markdown: kramdown
+
+# Set default values for the pages
+defaults:
+  - scope:
+      path: "" # empty string means all files in the project
+    values:
+      layout: default
+
+# Plugins (if needed, optional)
+plugins:
+  - jekyll-feed # For RSS feed support
+  - jekyll-sitemap # For generating a sitemap
