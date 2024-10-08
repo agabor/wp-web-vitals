@@ -1,0 +1,30 @@
+name: Zip Files
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  zip-files:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Install zip
+      run: sudo apt-get install -y zip
+
+    - name: Get the latest tag
+      id: get_tag
+      run: echo "::set-output name=tag::$(git describe --tags --abbrev=0)"
+
+    - name: Zip files
+      run: zip wp-web-vitals-${{ steps.get_tag.outputs.tag }}.zip wp-web-vitals.php wp-web-vitals.js LICENCE
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: wp-web-vitals-${{ steps.get_tag.outputs.tag }}
+        path: wp-web-vitals-${{ steps.get_tag.outputs.tag }}.zip
