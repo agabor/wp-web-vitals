@@ -12,6 +12,11 @@ github_username: agabor
 # Show your site's title in the header
 show_title: true
 
+show_downloads: true
+
+github:
+  zip_url: https://github.com/agabor/wp-web-vitals/actions/runs/11233024219/artifacts/2028499061
+
 # Enable Google Analytics (optional)
 # google_analytics: UA-XXXXXXXX-X
 
