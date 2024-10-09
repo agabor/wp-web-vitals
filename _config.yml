@@ -15,7 +15,7 @@ show_title: true
 show_downloads: true
 
 github:
-  zip_url: https://github.com/agabor/wp-web-vitals/actions/runs/11233024219/artifacts/2028499061
+  zip_url: https://github.com/agabor/wp-web-vitals/actions/runs/11251721974/artifacts/2033856708
   tar_url: null
 
 # Enable Google Analytics (optional)
