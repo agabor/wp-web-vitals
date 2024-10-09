@@ -96,3 +96,54 @@ function wp_web_vitals_log_webvitals() {
 
     wp_send_json_success('Performance data logged successfully.');
 }
+
+// Add a new menu item in the WordPress admin
+add_action('admin_menu', 'wp_web_vitals_admin_menu');
+
+function wp_web_vitals_admin_menu() {
+    add_menu_page(
+        'Web Vitals Averages', // Page title
+        'Web Vitals',          // Menu title
+        'manage_options',      // Capability
+        'web-vitals-averages', // Menu slug
+        'wp_web_vitals_admin_page', // Callback function
+        'dashicons-chart-line', // Icon
+        6                      // Position
+    );
+}
+
+// Display the admin page content
+function wp_web_vitals_admin_page() {
+    global $wpdb;
+    $table_name = wp_web_vitals_table_name();
+
+    // Query to calculate the averages
+    $results = $wpdb->get_row("
+        SELECT 
+            AVG(ttfb) as avg_ttfb,
+            AVG(fcp) as avg_fcp,
+            AVG(lcp) as avg_lcp,
+            AVG(inp) as avg_inp,
+            AVG(cls) as avg_cls
+        FROM $table_name
+    ");
+
+    // Display the results
+    echo '<div class="wrap">';
+    echo '<h1>Web Vitals Averages</h1>';
+    if ($results) {
+        echo '<table class="widefat fixed" cellspacing="0">';
+        echo '<thead><tr><th>Metric</th><th>Average</th></tr></thead>';
+        echo '<tbody>';
+        echo '<tr><td>TTFB</td><td>' . number_format($results->avg_ttfb, 2) . '</td></tr>';
+        echo '<tr><td>FCP</td><td>' . number_format($results->avg_fcp, 2) . '</td></tr>';
+        echo '<tr><td>LCP</td><td>' . number_format($results->avg_lcp, 2) . '</td></tr>';
+        echo '<tr><td>INP</td><td>' . number_format($results->avg_inp, 2) . '</td></tr>';
+        echo '<tr><td>CLS</td><td>' . number_format($results->avg_cls, 2) . '</td></tr>';
+        echo '</tbody>';
+        echo '</table>';
+    } else {
+        echo '<p>No data available.</p>';
+    }
+    echo '</div>';
+}
