@@ -101,13 +101,18 @@ function wp_web_vitals_log_webvitals() {
 add_action('admin_menu', 'wp_web_vitals_admin_menu');
 
 function wp_web_vitals_admin_menu() {
+    // Read the SVG file from the plugin directory
+    $svg_file_path = plugin_dir_path(__FILE__) . 'performance.svg';
+    $svg_content = file_get_contents($svg_file_path);
+    $svg_base64 = 'data:image/svg+xml;base64,' . base64_encode($svg_content);
+
     add_menu_page(
         'Web Vitals Averages', // Page title
         'Web Vitals',          // Menu title
         'manage_options',      // Capability
         'web-vitals-averages', // Menu slug
         'wp_web_vitals_admin_page', // Callback function
-        'dashicons-chart-line', // Icon
+        $svg_base64,           // Custom SVG icon
         6                      // Position
     );
 }
@@ -145,5 +150,6 @@ function wp_web_vitals_admin_page() {
     } else {
         echo '<p>No data available.</p>';
     }
+    echo '<div>Icons made from <a href="https://www.onlinewebfonts.com/icon">svg icons</a>is licensed by CC BY 4.0</div>';
     echo '</div>';
 }

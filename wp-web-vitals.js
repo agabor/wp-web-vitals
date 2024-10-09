@@ -79,6 +79,6 @@ document.addEventListener("DOMContentLoaded", function () {
                 .catch(error => {
                     console.error('AJAX error:', error);
                 });
-        }, 2000);
+        }, 5000);
     }
 });
