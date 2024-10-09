@@ -13,8 +13,13 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Install zip
-      run: sudo apt-get install -y zip
+    - name: Install dependencies
+      run: |
+        sudo apt-get install -y zip
+        npm install -g uglify-js
+
+    - name: Minify JavaScript
+      run: uglifyjs wp-web-vitals.js -o wp-web-vitals.js
 
     - name: Zip files
       run: zip wp-web-vitals-${{ github.ref_name }}.zip wp-web-vitals.php wp-web-vitals.js LICENSE
