@@ -54,30 +54,31 @@ document.addEventListener("DOMContentLoaded", function () {
             userType = 'logged_in';
         }
 
-
-        fetch(wpWebVitals.ajaxUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded'
-            },
-            body: new URLSearchParams({
-                ...measurements,
-                action: 'log_webvitals',
-                userType: userType,
-                url: currentUrl,
-                nonce: wpWebVitals.nonce
+        setTimeout(() => {
+            fetch(wpWebVitals.ajaxUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: new URLSearchParams({
+                    ...measurements,
+                    action: 'log_webvitals',
+                    userType: userType,
+                    url: currentUrl,
+                    nonce: wpWebVitals.nonce
+                })
             })
-        })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    console.log('TTFB and URL logged successfully:', data);
-                } else {
-                    console.error('Error logging data:', data);
-                }
-        })
-        .catch(error => {
-            console.error('AJAX error:', error);
-        });
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log('Successfully logged data:', data);
+                    } else {
+                        console.error('Error logging data:', data);
+                    }
+                })
+                .catch(error => {
+                    console.error('AJAX error:', error);
+                });
+        }, 2000);
     }
 });

@@ -2,9 +2,10 @@
 /**
  * Plugin Name: WP Web Vitals
  * Description: Logs Time to First Byte (TTFB), URL, User Type, and User Agent information.
- * Version: 1.0
+ * Version: 0.0.1
  * Author: Gabor Angyal
  * Author URI: https://woodevops.com
+ * License: GPL3
  */
 
 if (!defined('ABSPATH')) {
@@ -13,20 +14,25 @@ if (!defined('ABSPATH')) {
 
 register_activation_hook(__FILE__, 'wp_web_vitals_create_table');
 
+function wp_web_vitals_table_name() {
+    global $wpdb;
+    return $wpdb->prefix . 'web_vitals_logs';
+}
+
 function wp_web_vitals_create_table() {
     global $wpdb;
-    $table_name = $wpdb->prefix . 'wp_web_vitals_logs';
+    $table_name = wp_web_vitals_table_name();
 
     $charset_collate = $wpdb->get_charset_collate();
 
     $sql = "CREATE TABLE $table_name (
         id mediumint(9) NOT NULL AUTO_INCREMENT,
         ttfb float NOT NULL,
-        fcp: float NOT NULL,
-        lcp: float NOT NULL,
-        inp: float NOT NULL,
-        cls: float NOT NULL,
-        measurement_seconds: float NOT NULL,
+        fcp float NOT NULL,
+        lcp float NOT NULL,
+        inp float NOT NULL,
+        cls float NOT NULL,
+        measurement_seconds float NOT NULL,
         user_type varchar(255) DEFAULT '' NOT NULL,
         url text NOT NULL,
         user_agent text NOT NULL,
@@ -36,6 +42,11 @@ function wp_web_vitals_create_table() {
 
     require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
     dbDelta($sql);
+    if ($wpdb->last_error) {
+        error_log("Error creating table: " . $wpdb->last_error);
+    } else {
+        error_log("Table created successfully or already exists.");
+    }
 }
 
 add_action('wp_enqueue_scripts', 'wp_web_vitals_enqueue_script');
@@ -70,8 +81,7 @@ function wp_web_vitals_log_webvitals() {
     $user_agent = isset($_SERVER['HTTP_USER_AGENT']) ? sanitize_text_field($_SERVER['HTTP_USER_AGENT']) : '';
 
     global $wpdb;
-    $table_name = $wpdb->prefix . 'wp_web_vitals_logs';
-    $wpdb->insert($table_name, [
+    $wpdb->insert(wp_web_vitals_table_name(), [
         'ttfb' => $ttfb,
         'fcp' => $fcp,
         'lcp' => $lcp,
