@@ -45,11 +45,12 @@ function wp_web_vitals_create_table() {
 
     $sql = "CREATE TABLE $table_name (
         id mediumint(9) NOT NULL AUTO_INCREMENT,
+        lcp float NOT NULL,
+        fid float NOT NULL,
+        cls float NOT NULL,
+        inp float NOT NULL,
         ttfb float NOT NULL,
         fcp float NOT NULL,
-        lcp float NOT NULL,
-        inp float NOT NULL,
-        cls float NOT NULL,
         measurement_seconds float NOT NULL,
         user_type varchar(255) DEFAULT '' NOT NULL,
         url text NOT NULL,
@@ -83,11 +84,10 @@ add_action('wp_ajax_log_webvitals', 'wp_web_vitals_log_webvitals');
 function wp_web_vitals_log_webvitals() {
     check_ajax_referer('wp-web-vitals-nonce', 'nonce');
 
+    $lcp = isset($_POST['lcp']) ? floatval($_POST['lcp']) : null;
+    $cls = isset($_POST['cls']) ? floatval($_POST['cls']) : null;
     $ttfb = isset($_POST['ttfb']) ? floatval($_POST['ttfb']) : null;
     $fcp = isset($_POST['fcp']) ? floatval($_POST['fcp']) : null;
-    $lcp = isset($_POST['lcp']) ? floatval($_POST['lcp']) : null;
-    $inp = isset($_POST['inp']) ? floatval($_POST['inp']) : null;
-    $cls = isset($_POST['cls']) ? floatval($_POST['cls']) : null;
     $measurement_seconds = isset($_POST['measurementSeconds']) ? floatval($_POST['measurementSeconds']) : null;
     $user_type = isset($_POST['userType']) ? sanitize_text_field($_POST['userType']) : '';
     $url = isset($_POST['url']) ? sanitize_text_field($_POST['url']) : '';
@@ -100,11 +100,10 @@ function wp_web_vitals_log_webvitals() {
 
     global $wpdb;
     $wpdb->insert(wp_web_vitals_table_name(), [
+        'lcp' => $lcp,
+        'cls' => $cls,
         'ttfb' => $ttfb,
         'fcp' => $fcp,
-        'lcp' => $lcp,
-        'inp' => $inp,
-        'cls' => $cls,
         'measurement_seconds' => $measurement_seconds,
         'url' => $url,
         'user_type' => $user_type,
@@ -115,59 +114,59 @@ function wp_web_vitals_log_webvitals() {
     wp_send_json_success('Performance data logged successfully.');
 }
 
-// Add a new menu item in the WordPress admin
 add_action('admin_menu', 'wp_web_vitals_admin_menu');
 
 function wp_web_vitals_admin_menu() {
-    // Read the SVG file from the plugin directory
     $svg_file_path = plugin_dir_path(__FILE__) . 'performance.svg';
     $svg_content = file_get_contents($svg_file_path);
     $svg_base64 = 'data:image/svg+xml;base64,' . base64_encode($svg_content);
 
     add_menu_page(
-        'Web Vitals Averages', // Page title
-        'Web Vitals',          // Menu title
-        'manage_options',      // Capability
-        'web-vitals-averages', // Menu slug
-        'wp_web_vitals_admin_page', // Callback function
-        $svg_base64,           // Custom SVG icon
-        6                      // Position
+        'Web Vitals Averages',
+        'Web Vitals',
+        'manage_options',
+        'web-vitals-averages',
+        'wp_web_vitals_admin_page',
+        $svg_base64,
+        6
     );
 }
 
-// Display the admin page content
 function wp_web_vitals_admin_page() {
     global $wpdb;
     $table_name = wp_web_vitals_table_name();
 
-    // Query to calculate the averages
     $results = $wpdb->get_row("
         SELECT 
+            AVG(lcp) as avg_lcp,
+            AVG(cls) as avg_cls
             AVG(ttfb) as avg_ttfb,
             AVG(fcp) as avg_fcp,
-            AVG(lcp) as avg_lcp,
-            AVG(inp) as avg_inp,
-            AVG(cls) as avg_cls
         FROM $table_name
     ");
-
-    // Display the results
-    echo '<div class="wrap">';
-    echo '<h1>Web Vitals Averages</h1>';
+?>
+    <div class="wrap">
+    <h1>Web Vitals Averages</h1>
+<?php
     if ($results) {
-        echo '<table class="widefat fixed" cellspacing="0">';
-        echo '<thead><tr><th>Metric</th><th>Average</th></tr></thead>';
-        echo '<tbody>';
-        echo '<tr><td>TTFB</td><td>' . number_format($results->avg_ttfb, 2) . '</td></tr>';
-        echo '<tr><td>FCP</td><td>' . number_format($results->avg_fcp, 2) . '</td></tr>';
-        echo '<tr><td>LCP</td><td>' . number_format($results->avg_lcp, 2) . '</td></tr>';
-        echo '<tr><td>INP</td><td>' . number_format($results->avg_inp, 2) . '</td></tr>';
-        echo '<tr><td>CLS</td><td>' . number_format($results->avg_cls, 2) . '</td></tr>';
-        echo '</tbody>';
-        echo '</table>';
+?>
+        <table class="widefat fixed" cellspacing="0">
+        <thead><tr><th>Metric</th><th>Average</th></tr></thead>
+        <tbody>
+        <tr><td>LCP</td><td><?php echo number_format($results->avg_lcp, 2); ?></td></tr>
+        <tr><td>CLS</td><td><?php echo number_format($results->avg_cls, 2); ?></td></tr>
+        <tr><td>TTFB</td><td><?php echo number_format($results->avg_ttfb, 2); ?></td></tr>
+        <tr><td>FCP</td><td><?php echo number_format($results->avg_fcp, 2); ?></td></tr>
+        </tbody>
+        </table>
+<?php
     } else {
-        echo '<p>No data available.</p>';
+?>
+        <p>No data available.</p>
+<?php
     }
-    echo '<div>Icons made from <a href="https://www.onlinewebfonts.com/icon">svg icons</a>is licensed by CC BY 4.0</div>';
-    echo '</div>';
+?>
+    <div>Icons made from <a href="https://www.onlinewebfonts.com/icon">svg icons</a>is licensed by CC BY 4.0</div>
+    </div>
+<?php
 }

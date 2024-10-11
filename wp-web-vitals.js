@@ -19,11 +19,10 @@
 document.addEventListener("DOMContentLoaded", function () {
     if (window.performance) {
         let measurements = {
+            lcp: 0,
+            cls: 0,
             ttfb: 0,
             fcp: 0,
-            lcp: 0,
-            inp: 0,
-            cls: 0,
             measurementSeconds: 0
         };
         const startTime = performance.now();
@@ -39,22 +38,18 @@ document.addEventListener("DOMContentLoaded", function () {
 
         const observer = new PerformanceObserver((list) => {
             for (const entry of list.getEntries()) {
-                if (entry.name === 'first-contentful-paint') {
-                    measurements.fcp = entry.startTime;
-                    setMeasurementTime();
-                    console.log('FCP:', entry.startTime);
-                } else if (entry.entryType === 'largest-contentful-paint') {
+                if (entry.entryType === 'largest-contentful-paint') {
                     measurements.lcp = entry.startTime;
                     setMeasurementTime();
                     console.log('LCP:', entry.startTime);
-                } else if (entry.entryType === 'event' && entry.name === 'interaction-to-next-paint') {
-                    measurements.inp = entry.duration;
-                    setMeasurementTime();
-                    console.log('INP:', entry.startTime);
                 } else if (entry.entryType === 'layout-shift' && !entry.hadRecentInput) {
                     measurements.cls += entry.value;
                     setMeasurementTime();
                     console.log('CLS:', measurements.cls);
+                } else if (entry.name === 'first-contentful-paint') {
+                    measurements.fcp = entry.startTime;
+                    setMeasurementTime();
+                    console.log('FCP:', entry.startTime);
                 }
             }
         });
@@ -64,11 +59,8 @@ document.addEventListener("DOMContentLoaded", function () {
         observer.observe({ type: 'event', buffered: true, durationThreshold: 0 });
         observer.observe({ type: 'layout-shift', buffered: true });
 
-        var currentUrl = window.location.href;
-
-        var userType = 'guest';
-        if (typeof wp !== 'undefined' && typeof wp.userSettings !== 'undefined') {
-            console.log(wp.userSettings);
+        let userType = 'guest';
+        if ( document.body.classList.contains( 'logged-in' ) ) {
             userType = 'logged_in';
         }
 
@@ -82,7 +74,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     ...measurements,
                     action: 'log_webvitals',
                     userType: userType,
-                    url: currentUrl,
+                    url: window.location.href,
                     nonce: wpWebVitals.nonce
                 })
             })
