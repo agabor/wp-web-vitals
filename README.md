@@ -8,6 +8,17 @@ This project aims to gather Core Web Vitals and other essential metrics for both
 
 Current Google performance tools, such as PageSpeed Insights and Search Console, do not distinguish between guest and logged-in users, providing only an average of the results. However, this information is crucial, because optimizing for these two user groups requires distinctly different strategies.
 
+## Data Protection
+
+All data is securely stored in the WordPress server’s database where this plugin is installed. This is a standalone plugin, and no external services can access the information processed by it. No personally identifiable information (PII) is stored.
+
+## License
+
+This project is licensed under the [https://www.gnu.org/licenses/gpl-3.0.html](GPLv3).
+
+> [!WARNING]  
+> This plugin is currently in active development and has not been extensively tested on multiple websites. Please use it with caution, and verify the data it provides before relying on it fully.
+
 ## Metrics
 
 ### Core Web Vitals
