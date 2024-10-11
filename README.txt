@@ -7,5 +7,5 @@ Stable tag: 0.1
 Requires PHP: 7.0
 License: GPLv3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
-Collects Core Web Vital information for guests and logged in users.
+This project aims to gather Core Web Vitals and other essential metrics for both guest and logged-in users separately. This data is vital for eCommerce and membership websites seeking to enhance the experience for logged-in users.
 [GitHub](https://github.com/agabor/wp-web-vitals)
