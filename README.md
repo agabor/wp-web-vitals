@@ -1,5 +1,8 @@
 # WP Web Vitals
 
+> [!WARNING]  
+> This plugin is currently in active development and has not been extensively tested on multiple websites. Please use it with caution, and verify the data it provides before relying on it fully.
+
 ## Project Overview
 
 This project aims to gather Core Web Vitals and other essential metrics for both guest and logged-in users separately. This data is vital for eCommerce and membership websites seeking to enhance the experience for logged-in users.
@@ -14,10 +17,7 @@ All data is securely stored in the WordPress server’s database where this plug
 
 ## License
 
-This project is licensed under the [https://www.gnu.org/licenses/gpl-3.0.html](GPLv3).
-
-> [!WARNING]  
-> This plugin is currently in active development and has not been extensively tested on multiple websites. Please use it with caution, and verify the data it provides before relying on it fully.
+This project is licensed under the [GPLv3](https://www.gnu.org/licenses/gpl-3.0.html).
 
 ## Metrics
 
