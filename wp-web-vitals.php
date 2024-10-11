@@ -68,6 +68,22 @@ function wp_web_vitals_create_table() {
     }
 }
 
+function wp_web_vitals_delete_table() {
+    global $wpdb;
+    $table_name = wp_web_vitals_table_name();
+
+    $sql = "DROP TABLE IF EXISTS $table_name;";
+    $wpdb->query($sql);
+
+    if ($wpdb->last_error) {
+        error_log("Error deleting table: " . $wpdb->last_error);
+    } else {
+        error_log("Table deleted successfully.");
+    }
+}
+
+register_deactivation_hook(__FILE__, 'wp_web_vitals_delete_table');
+
 add_action('wp_enqueue_scripts', 'wp_web_vitals_enqueue_script');
 
 function wp_web_vitals_enqueue_script() {
@@ -110,10 +126,11 @@ function wp_web_vitals_log_webvitals() {
         'user_agent' => $user_agent,
         'created_at' => current_time('mysql')
     ]);
-
-    wp_send_json_success('Performance data logged successfully.');
-}
-
+    if ($wpdb->last_error) {
+        wp_send_json_error('Error logging performance data. ' . $wpdb->last_error);
+    } else
+        wp_send_json_success('Performance data logged successfully.');
+    }
 add_action('admin_menu', 'wp_web_vitals_admin_menu');
 
 function wp_web_vitals_admin_menu() {
@@ -139,14 +156,21 @@ function wp_web_vitals_admin_page() {
     $results = $wpdb->get_row("
         SELECT 
             AVG(lcp) as avg_lcp,
-            AVG(cls) as avg_cls
+            AVG(cls) as avg_cls,
             AVG(ttfb) as avg_ttfb,
-            AVG(fcp) as avg_fcp,
+            AVG(fcp) as avg_fcp
         FROM $table_name
     ");
 ?>
     <div class="wrap">
     <h1>Web Vitals Averages</h1>
+
+<?php
+    if ($wpdb->last_error) {
+        echo "<p>" . $wpdb->last_error . "</p>";
+        return;
+    } 
+?>
 <?php
     if ($results) {
 ?>
