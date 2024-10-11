@@ -54,7 +54,6 @@ function wp_web_vitals_create_table() {
         measurement_seconds float NOT NULL,
         user_type varchar(255) DEFAULT '' NOT NULL,
         url text NOT NULL,
-        user_agent text NOT NULL,
         created_at datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
         PRIMARY KEY (id)
     ) $charset_collate;";
@@ -123,7 +122,6 @@ function wp_web_vitals_log_webvitals() {
         'measurement_seconds' => $measurement_seconds,
         'url' => $url,
         'user_type' => $user_type,
-        'user_agent' => $user_agent,
         'created_at' => current_time('mysql')
     ]);
     if ($wpdb->last_error) {
