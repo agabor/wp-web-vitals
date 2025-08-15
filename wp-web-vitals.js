@@ -75,6 +75,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     action: 'log_webvitals',
                     userType: userType,
                     url: window.location.href,
+                    pageRenderUuid: wpWebVitals.pageRenderUuid,
                     nonce: wpWebVitals.nonce
                 })
             })
