@@ -1,26 +1,7 @@
- /*
-    WP Web Vitals
-    Copyright (C) 2024  Code Sharp Kft.
-
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-*/
-
 document.addEventListener("DOMContentLoaded", function () {
     if (window.performance) {
         let measurements = {
             lcp: 0,
-            cls: 0,
             ttfb: 0,
             fcp: 0,
             measurementSeconds: 0
@@ -42,10 +23,6 @@ document.addEventListener("DOMContentLoaded", function () {
                     measurements.lcp = entry.startTime;
                     setMeasurementTime();
                     console.log('LCP:', entry.startTime);
-                } else if (entry.entryType === 'layout-shift' && !entry.hadRecentInput) {
-                    measurements.cls += entry.value;
-                    setMeasurementTime();
-                    console.log('CLS:', measurements.cls);
                 } else if (entry.name === 'first-contentful-paint') {
                     measurements.fcp = entry.startTime;
                     setMeasurementTime();
@@ -56,8 +33,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
         observer.observe({ type: 'paint', buffered: true });
         observer.observe({ type: 'largest-contentful-paint', buffered: true });
-        observer.observe({ type: 'event', buffered: true, durationThreshold: 0 });
-        observer.observe({ type: 'layout-shift', buffered: true });
 
         let userType = 'guest';
         if ( document.body.classList.contains( 'logged-in' ) ) {
