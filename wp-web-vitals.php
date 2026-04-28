@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WP Web Vitals
  * Description: Logs Time to First Byte (TTFB), URL, User Type, and User Agent information.
- * Version: 0.0.1
+ * Version: 0.1.0
  * Author: Gabor Angyal
  * Author URI: https://woodevops.com
  * License: GPL3
@@ -49,7 +49,6 @@ function wp_web_vitals_create_table() {
 
     $charset_collate = $wpdb->get_charset_collate();
 
-    // Create page renders table first (parent table)
     $page_renders_sql = "CREATE TABLE $page_renders_table_name (
         id mediumint(9) NOT NULL AUTO_INCREMENT,
         uuid varchar(36) NOT NULL UNIQUE,
@@ -59,14 +58,10 @@ function wp_web_vitals_create_table() {
         INDEX idx_uuid (uuid)
     ) $charset_collate;";
 
-    // Create web vitals logs table with foreign key reference
     $sql = "CREATE TABLE $table_name (
         id mediumint(9) NOT NULL AUTO_INCREMENT,
         page_render_id mediumint(9) DEFAULT NULL,
         lcp float NOT NULL,
-        fid float NOT NULL,
-        cls float NOT NULL,
-        inp float NOT NULL,
         ttfb float NOT NULL,
         fcp float NOT NULL,
         measurement_seconds float NOT NULL,
@@ -79,7 +74,6 @@ function wp_web_vitals_create_table() {
 
     require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
     
-    // Create page renders table
     dbDelta($page_renders_sql);
     if ($wpdb->last_error) {
         error_log("Error creating page renders table: " . $wpdb->last_error);
@@ -87,7 +81,6 @@ function wp_web_vitals_create_table() {
         error_log("Page renders table created successfully or already exists.");
     }
     
-    // Create web vitals logs table
     dbDelta($sql);
     if ($wpdb->last_error) {
         error_log("Error creating web vitals logs table: " . $wpdb->last_error);
@@ -101,7 +94,6 @@ function wp_web_vitals_delete_table() {
     $table_name = wp_web_vitals_table_name();
     $page_renders_table_name = wp_web_vitals_page_renders_table_name();
 
-    // Delete child table first (web_vitals_logs)
     $sql = "DROP TABLE IF EXISTS $table_name;";
     $wpdb->query($sql);
 
@@ -111,7 +103,6 @@ function wp_web_vitals_delete_table() {
         error_log("Web vitals logs table deleted successfully.");
     }
 
-    // Delete parent table (page_renders)
     $sql = "DROP TABLE IF EXISTS $page_renders_table_name;";
     $wpdb->query($sql);
 
@@ -156,13 +147,11 @@ function wp_web_vitals_create_page_render() {
 add_action('wp_enqueue_scripts', 'wp_web_vitals_enqueue_script');
 add_action('wp_head', 'wp_web_vitals_add_uuid_to_head');
 
-// Global variable to store the UUID for this page render
 $wp_web_vitals_page_render_uuid = null;
 
 function wp_web_vitals_enqueue_script() {
     global $wp_web_vitals_page_render_uuid;
     
-    // Create page render record and get UUID
     $wp_web_vitals_page_render_uuid = wp_web_vitals_create_page_render();
     
     wp_enqueue_script('wp-web-vitals', plugin_dir_url(__FILE__) . 'wp-web-vitals.js', [], '1.0', true);
@@ -188,7 +177,6 @@ function wp_web_vitals_log_webvitals() {
     check_ajax_referer('wp-web-vitals-nonce', 'nonce');
 
     $lcp = isset($_POST['lcp']) ? floatval($_POST['lcp']) : null;
-    $cls = isset($_POST['cls']) ? floatval($_POST['cls']) : null;
     $ttfb = isset($_POST['ttfb']) ? floatval($_POST['ttfb']) : null;
     $fcp = isset($_POST['fcp']) ? floatval($_POST['fcp']) : null;
     $measurement_seconds = isset($_POST['measurementSeconds']) ? floatval($_POST['measurementSeconds']) : null;
@@ -202,7 +190,6 @@ function wp_web_vitals_log_webvitals() {
 
     global $wpdb;
     
-    // Get the page render ID from the UUID
     $page_render_id = null;
     if (!empty($page_render_uuid)) {
         $page_render_record = $wpdb->get_row($wpdb->prepare(
@@ -215,12 +202,9 @@ function wp_web_vitals_log_webvitals() {
         }
     }
 
-    $user_agent = isset($_SERVER['HTTP_USER_AGENT']) ? sanitize_text_field($_SERVER['HTTP_USER_AGENT']) : '';
-
     $wpdb->insert(wp_web_vitals_table_name(), [
         'page_render_id' => $page_render_id,
         'lcp' => $lcp,
-        'cls' => $cls,
         'ttfb' => $ttfb,
         'fcp' => $fcp,
         'measurement_seconds' => $measurement_seconds,
@@ -266,7 +250,6 @@ function wp_web_vitals_admin_page() {
         $results = $wpdb->get_row($wpdb->prepare("
             SELECT 
                 AVG(wvl.lcp) as avg_lcp,
-                AVG(wvl.cls) as avg_cls,
                 AVG(wvl.ttfb) as avg_ttfb,
                 AVG(wvl.fcp) as avg_fcp
             FROM $table_name wvl
@@ -308,7 +291,6 @@ function wp_web_vitals_admin_page() {
             <thead><tr><th>Metric</th><th>Average</th></tr></thead>
             <tbody>
                 <tr><td>LCP</td><td><?php echo esc_html(number_format($results->avg_lcp, 2)); ?></td></tr>
-                <tr><td>CLS</td><td><?php echo esc_html(number_format($results->avg_cls, 2)); ?></td></tr>
                 <tr><td>TTFB</td><td><?php echo esc_html(number_format($results->avg_ttfb, 2)); ?></td></tr>
                 <tr><td>FCP</td><td><?php echo esc_html(number_format($results->avg_fcp, 2)); ?></td></tr>
             </tbody>
