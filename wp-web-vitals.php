@@ -251,41 +251,76 @@ function wp_web_vitals_admin_menu() {
 function wp_web_vitals_admin_page() {
     global $wpdb;
     $table_name = wp_web_vitals_table_name();
+    $page_renders_table_name = wp_web_vitals_page_renders_table_name();
 
-    $results = $wpdb->get_row("
-        SELECT 
-            AVG(lcp) as avg_lcp,
-            AVG(cls) as avg_cls,
-            AVG(ttfb) as avg_ttfb,
-            AVG(fcp) as avg_fcp
-        FROM $table_name
+    $selected_page_id = isset($_GET['page_id']) ? intval($_GET['page_id']) : 0;
+
+    $pages = $wpdb->get_results("
+        SELECT DISTINCT pr.id, pr.path
+        FROM $page_renders_table_name pr
+        INNER JOIN $table_name wvl ON pr.id = wvl.page_render_id
+        ORDER BY pr.path ASC
     ");
+
+    if ($selected_page_id > 0) {
+        $results = $wpdb->get_row($wpdb->prepare("
+            SELECT 
+                AVG(wvl.lcp) as avg_lcp,
+                AVG(wvl.cls) as avg_cls,
+                AVG(wvl.ttfb) as avg_ttfb,
+                AVG(wvl.fcp) as avg_fcp
+            FROM $table_name wvl
+            WHERE wvl.page_render_id = %d
+        ", $selected_page_id));
+    } else {
+        $results = null;
+    }
 ?>
     <div class="wrap">
-    <h1>Web Vitals Averages</h1>
+        <h1>Web Vitals Averages</h1>
+
+        <form method="get">
+            <input type="hidden" name="page" value="web-vitals-averages" />
+            <label for="page_id">Select Page:</label>
+            <select name="page_id" id="page_id">
+                <option value="0">-- Select a Page --</option>
+<?php
+    if ($pages) {
+        foreach ($pages as $page) {
+            $selected = selected($page->id, $selected_page_id, false);
+            echo '<option value="' . esc_attr($page->id) . '" ' . $selected . '>' . esc_html($page->path) . '</option>';
+        }
+    }
+?>
+            </select>
+            <input type="submit" class="button" value="Filter" />
+        </form>
 
 <?php
     if ($wpdb->last_error) {
-        echo "<p>" . $wpdb->last_error . "</p>";
+        echo "<p>" . esc_html($wpdb->last_error) . "</p>";
         return;
-    } 
-?>
-<?php
-    if ($results) {
+    }
+
+    if ($selected_page_id > 0 && $results) {
 ?>
         <table class="widefat fixed" cellspacing="0">
-        <thead><tr><th>Metric</th><th>Average</th></tr></thead>
-        <tbody>
-        <tr><td>LCP</td><td><?php echo number_format($results->avg_lcp, 2); ?></td></tr>
-        <tr><td>CLS</td><td><?php echo number_format($results->avg_cls, 2); ?></td></tr>
-        <tr><td>TTFB</td><td><?php echo number_format($results->avg_ttfb, 2); ?></td></tr>
-        <tr><td>FCP</td><td><?php echo number_format($results->avg_fcp, 2); ?></td></tr>
-        </tbody>
+            <thead><tr><th>Metric</th><th>Average</th></tr></thead>
+            <tbody>
+                <tr><td>LCP</td><td><?php echo esc_html(number_format($results->avg_lcp, 2)); ?></td></tr>
+                <tr><td>CLS</td><td><?php echo esc_html(number_format($results->avg_cls, 2)); ?></td></tr>
+                <tr><td>TTFB</td><td><?php echo esc_html(number_format($results->avg_ttfb, 2)); ?></td></tr>
+                <tr><td>FCP</td><td><?php echo esc_html(number_format($results->avg_fcp, 2)); ?></td></tr>
+            </tbody>
         </table>
+<?php
+    } elseif ($selected_page_id > 0) {
+?>
+        <p>No data available for this page.</p>
 <?php
     } else {
 ?>
-        <p>No data available.</p>
+        <p>Select a page to view averages.</p>
 <?php
     }
 ?>
