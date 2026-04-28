@@ -234,21 +234,17 @@ function wp_web_vitals_log_webvitals() {
         wp_send_json_success('Performance data logged successfully.');
     }
 }
+
 add_action('admin_menu', 'wp_web_vitals_admin_menu');
 
 function wp_web_vitals_admin_menu() {
-    $svg_file_path = plugin_dir_path(__FILE__) . 'performance.svg';
-    $svg_content = file_get_contents($svg_file_path);
-    $svg_base64 = 'data:image/svg+xml;base64,' . base64_encode($svg_content);
-
-    add_menu_page(
+    add_submenu_page(
+        'tools.php',
         'Web Vitals Averages',
         'Web Vitals',
         'manage_options',
         'web-vitals-averages',
-        'wp_web_vitals_admin_page',
-        $svg_base64,
-        6
+        'wp_web_vitals_admin_page'
     );
 }
 
@@ -293,7 +289,6 @@ function wp_web_vitals_admin_page() {
 <?php
     }
 ?>
-    <div>Icons made from <a href="https://www.onlinewebfonts.com/icon">svg icons</a>is licensed by CC BY 4.0</div>
     </div>
 <?php
 }
