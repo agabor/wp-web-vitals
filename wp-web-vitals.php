@@ -30,6 +30,10 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+define('WP_WEB_VITALS_CHART_HEIGHT', 400);
+define('WP_WEB_VITALS_CHART_MAX_WIDTH', 1200);
+define('WP_WEB_VITALS_CHART_MARGIN_BOTTOM', 40);
+
 register_activation_hook(__FILE__, 'wp_web_vitals_create_table');
 
 function wp_web_vitals_table_name() {
@@ -271,6 +275,105 @@ function wp_web_vitals_admin_page() {
 
     wp_enqueue_script('chartjs', 'https://cdn.jsdelivr.net/npm/chart.js', [], '3.9.1', true);
     
+    $chart_height = WP_WEB_VITALS_CHART_HEIGHT;
+    $chart_max_width = WP_WEB_VITALS_CHART_MAX_WIDTH;
+
+    $inline_script = "
+        const chartData = " . wp_json_encode($chart_data) . ";
+
+        const fcpCtx = document.getElementById('fcpChart').getContext('2d');
+        new Chart(fcpCtx, {
+            type: 'bar',
+            data: {
+                labels: chartData.dates,
+                datasets: [
+                    {
+                        label: 'Guest Users (ms)',
+                        data: chartData.fcp_guest,
+                        backgroundColor: 'rgba(54, 162, 235, 0.7)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Logged-in Users (ms)',
+                        data: chartData.fcp_logged_in,
+                        backgroundColor: 'rgba(75, 192, 75, 0.7)',
+                        borderColor: 'rgba(75, 192, 75, 1)',
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Milliseconds'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    }
+                }
+            }
+        });
+
+        const ttfbCtx = document.getElementById('ttfbChart').getContext('2d');
+        new Chart(ttfbCtx, {
+            type: 'bar',
+            data: {
+                labels: chartData.dates,
+                datasets: [
+                    {
+                        label: 'Guest Users (ms)',
+                        data: chartData.ttfb_guest,
+                        backgroundColor: 'rgba(255, 159, 64, 0.7)',
+                        borderColor: 'rgba(255, 159, 64, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Logged-in Users (ms)',
+                        data: chartData.ttfb_logged_in,
+                        backgroundColor: 'rgba(255, 99, 132, 0.7)',
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Milliseconds'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    }
+                }
+            }
+        });
+    ";
+    
+    wp_add_inline_script('chartjs', $inline_script);
+    
+    $chart_margin = WP_WEB_VITALS_CHART_MARGIN_BOTTOM;
+    $chart_container_style = "max-width: {$chart_max_width}px; margin-bottom: {$chart_margin}px; margin-left: auto; margin-right: auto;";
+    $canvas_style = "max-width: 100%; height: {$chart_height}px;";
+    
     ?>
     <div class="wrap">
         <h1>Web Vitals Analytics</h1>
@@ -324,105 +427,15 @@ function wp_web_vitals_admin_page() {
             });
         </script>
 
-        <div style="margin-bottom: 40px;">
+        <div style="<?php echo esc_attr($chart_container_style); ?>">
             <h2>First Contentful Paint (FCP) - Last 30 Days</h2>
-            <canvas id="fcpChart" style="max-width: 100%; height: 400px;"></canvas>
+            <canvas id="fcpChart" style="<?php echo esc_attr($canvas_style); ?>"></canvas>
         </div>
 
-        <div style="margin-bottom: 40px;">
+        <div style="<?php echo esc_attr($chart_container_style); ?>">
             <h2>Time to First Byte (TTFB) - Last 30 Days</h2>
-            <canvas id="ttfbChart" style="max-width: 100%; height: 400px;"></canvas>
+            <canvas id="ttfbChart" style="<?php echo esc_attr($canvas_style); ?>"></canvas>
         </div>
-
-        <script type="text/javascript">
-            const chartData = <?php echo wp_json_encode($chart_data); ?>;
-
-            const fcpCtx = document.getElementById('fcpChart').getContext('2d');
-            new Chart(fcpCtx, {
-                type: 'bar',
-                data: {
-                    labels: chartData.dates,
-                    datasets: [
-                        {
-                            label: 'Guest Users (ms)',
-                            data: chartData.fcp_guest,
-                            backgroundColor: 'rgba(54, 162, 235, 0.7)',
-                            borderColor: 'rgba(54, 162, 235, 1)',
-                            borderWidth: 1
-                        },
-                        {
-                            label: 'Logged-in Users (ms)',
-                            data: chartData.fcp_logged_in,
-                            backgroundColor: 'rgba(75, 192, 75, 0.7)',
-                            borderColor: 'rgba(75, 192, 75, 1)',
-                            borderWidth: 1
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            title: {
-                                display: true,
-                                text: 'Milliseconds'
-                            }
-                        }
-                    },
-                    plugins: {
-                        legend: {
-                            display: true,
-                            position: 'top'
-                        }
-                    }
-                }
-            });
-
-            const ttfbCtx = document.getElementById('ttfbChart').getContext('2d');
-            new Chart(ttfbCtx, {
-                type: 'bar',
-                data: {
-                    labels: chartData.dates,
-                    datasets: [
-                        {
-                            label: 'Guest Users (ms)',
-                            data: chartData.ttfb_guest,
-                            backgroundColor: 'rgba(255, 159, 64, 0.7)',
-                            borderColor: 'rgba(255, 159, 64, 1)',
-                            borderWidth: 1
-                        },
-                        {
-                            label: 'Logged-in Users (ms)',
-                            data: chartData.ttfb_logged_in,
-                            backgroundColor: 'rgba(255, 99, 132, 0.7)',
-                            borderColor: 'rgba(255, 99, 132, 1)',
-                            borderWidth: 1
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            title: {
-                                display: true,
-                                text: 'Milliseconds'
-                            }
-                        }
-                    },
-                    plugins: {
-                        legend: {
-                            display: true,
-                            position: 'top'
-                        }
-                    }
-                }
-            });
-        </script>
     </div>
     <?php
 }
