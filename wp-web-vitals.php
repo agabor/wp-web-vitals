@@ -61,7 +61,6 @@ function wp_web_vitals_create_table() {
     $sql = "CREATE TABLE $table_name (
         id mediumint(9) NOT NULL AUTO_INCREMENT,
         page_render_id mediumint(9) DEFAULT NULL,
-        lcp float NOT NULL,
         ttfb float NOT NULL,
         fcp float NOT NULL,
         measurement_seconds float NOT NULL,
@@ -176,7 +175,6 @@ add_action('wp_ajax_log_webvitals', 'wp_web_vitals_log_webvitals');
 function wp_web_vitals_log_webvitals() {
     check_ajax_referer('wp-web-vitals-nonce', 'nonce');
 
-    $lcp = isset($_POST['lcp']) ? floatval($_POST['lcp']) : null;
     $ttfb = isset($_POST['ttfb']) ? floatval($_POST['ttfb']) : null;
     $fcp = isset($_POST['fcp']) ? floatval($_POST['fcp']) : null;
     $measurement_seconds = isset($_POST['measurementSeconds']) ? floatval($_POST['measurementSeconds']) : null;
@@ -204,7 +202,6 @@ function wp_web_vitals_log_webvitals() {
 
     $wpdb->insert(wp_web_vitals_table_name(), [
         'page_render_id' => $page_render_id,
-        'lcp' => $lcp,
         'ttfb' => $ttfb,
         'fcp' => $fcp,
         'measurement_seconds' => $measurement_seconds,
@@ -264,7 +261,6 @@ function wp_web_vitals_admin_page() {
     if ($selected_page_id > 0) {
         $results = $wpdb->get_row($wpdb->prepare("
             SELECT 
-                AVG(wvl.lcp) as avg_lcp,
                 AVG(wvl.ttfb) as avg_ttfb,
                 AVG(wvl.fcp) as avg_fcp
             FROM $table_name wvl
@@ -329,7 +325,6 @@ function wp_web_vitals_admin_page() {
         <table class="widefat fixed" cellspacing="0">
             <thead><tr><th>Metric</th><th>Average</th></tr></thead>
             <tbody>
-                <tr><td>LCP</td><td><?php echo esc_html(number_format($results->avg_lcp, 2)); ?></td></tr>
                 <tr><td>TTFB</td><td><?php echo esc_html(number_format($results->avg_ttfb, 2)); ?></td></tr>
                 <tr><td>FCP</td><td><?php echo esc_html(number_format($results->avg_fcp, 2)); ?></td></tr>
             </tbody>

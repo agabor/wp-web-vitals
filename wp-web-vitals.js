@@ -1,7 +1,6 @@
 document.addEventListener("DOMContentLoaded", function () {
     if (window.performance) {
         let measurements = {
-            lcp: 0,
             ttfb: 0,
             fcp: 0,
             measurementSeconds: 0
@@ -17,29 +16,12 @@ document.addEventListener("DOMContentLoaded", function () {
             measurements.measurementSeconds = (performance.now() - startTime) / 1000;
         }
 
-        const observer = new PerformanceObserver((list) => {
-            for (const entry of list.getEntries()) {
-                if (entry.entryType === 'largest-contentful-paint') {
-                    measurements.lcp = entry.startTime;
-                    setMeasurementTime();
-                    console.log('LCP:', entry.startTime);
-                } else if (entry.name === 'first-contentful-paint') {
-                    measurements.fcp = entry.startTime;
-                    setMeasurementTime();
-                    console.log('FCP:', entry.startTime);
-                }
+        function logWebVitals() {
+            let userType = 'guest';
+            if (document.body.classList.contains('logged-in')) {
+                userType = 'logged_in';
             }
-        });
 
-        observer.observe({ type: 'paint', buffered: true });
-        observer.observe({ type: 'largest-contentful-paint', buffered: true });
-
-        let userType = 'guest';
-        if ( document.body.classList.contains( 'logged-in' ) ) {
-            userType = 'logged_in';
-        }
-
-        setTimeout(() => {
             fetch(wpWebVitals.ajaxUrl, {
                 method: 'POST',
                 headers: {
@@ -65,6 +47,19 @@ document.addEventListener("DOMContentLoaded", function () {
                 .catch(error => {
                     console.error('AJAX error:', error);
                 });
-        }, 5000);
+        }
+
+        const observer = new PerformanceObserver((list) => {
+            for (const entry of list.getEntries()) {
+                if (entry.name === 'first-contentful-paint') {
+                    measurements.fcp = entry.startTime;
+                    setMeasurementTime();
+                    console.log('FCP:', entry.startTime);
+                    logWebVitals();
+                }
+            }
+        });
+
+        observer.observe({ type: 'paint', buffered: true });
     }
 });
