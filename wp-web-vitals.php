@@ -111,7 +111,7 @@ function wp_web_vitals_log_webvitals() {
     }
 
     global $wpdb;
-    $path = isset($_SERVER['REQUEST_URI']) ? sanitize_text_field($_SERVER['REQUEST_URI']) : '';
+    $path = wp_parse_url($url, PHP_URL_PATH);
 
     $wpdb->insert(wp_web_vitals_table_name(), [
         'path' => $path,
@@ -279,8 +279,8 @@ function wp_web_vitals_admin_page() {
     wp_add_inline_script('chartjs', $inline_script);
     
     $chart_margin = WP_WEB_VITALS_CHART_MARGIN_BOTTOM;
-    $chart_container_style = "max-width: {$chart_max_width}px; margin-bottom: {$chart_margin}px; margin-left: auto; margin-right: auto;";
-    $canvas_style = "max-width: 100%; height: {$chart_height}px;";
+    $chart_container_style = "max-width: {$chart_max_width}px; margin-bottom: {$chart_margin}px; margin-left: auto; margin-right: auto; position: relative; height: {$chart_height}px;";
+    $canvas_style = "max-width: 100%;";
     
     ?>
     <div class="wrap">
