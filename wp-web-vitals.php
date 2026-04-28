@@ -97,6 +97,22 @@ function wp_web_vitals_enqueue_script() {
 add_action('wp_ajax_nopriv_log_webvitals', 'wp_web_vitals_log_webvitals');
 add_action('wp_ajax_log_webvitals', 'wp_web_vitals_log_webvitals');
 
+function wp_web_vitals_user_role_allowed($role) {
+    if ($role === 'customer') {
+        return true;
+    }
+    
+    if (strlen($role) >= 6 && substr($role, -6) === '_users') {
+        return true;
+    }
+    
+    if (strpos($role, 'markanagykovet') === 0) {
+        return true;
+    }
+    
+    return false;
+}
+
 function wp_web_vitals_log_webvitals() {
     check_ajax_referer('wp-web-vitals-nonce', 'nonce');
 
@@ -108,6 +124,27 @@ function wp_web_vitals_log_webvitals() {
 
     if ($ttfb === null || empty($url)) {
         wp_send_json_error('Invalid data received.');
+    }
+
+    if ($user_type === 'logged_in') {
+        $current_user = wp_get_current_user();
+        if ($current_user->ID === 0) {
+            wp_send_json_success('User not authenticated.');
+        }
+
+        $user_roles = $current_user->roles;
+        $allowed = false;
+
+        foreach ($user_roles as $role) {
+            if (wp_web_vitals_user_role_allowed($role)) {
+                $allowed = true;
+                break;
+            }
+        }
+
+        if (!$allowed) {
+            wp_send_json_success('User role not allowed for logging.');
+        }
     }
 
     global $wpdb;
