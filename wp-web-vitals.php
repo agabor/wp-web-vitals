@@ -219,6 +219,21 @@ function wp_web_vitals_log_webvitals() {
     }
 }
 
+add_action('wp_ajax_clean_webvitals_data', 'wp_web_vitals_clean_data');
+
+function wp_web_vitals_clean_data() {
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('Insufficient permissions.');
+    }
+
+    check_ajax_referer('wp-web-vitals-admin-nonce', 'nonce');
+
+    wp_web_vitals_delete_table();
+    wp_web_vitals_create_table();
+
+    wp_send_json_success('All data has been cleaned and tables have been recreated.');
+}
+
 add_action('admin_menu', 'wp_web_vitals_admin_menu');
 
 function wp_web_vitals_admin_menu() {
@@ -278,6 +293,30 @@ function wp_web_vitals_admin_page() {
             </select>
             <input type="submit" class="button" value="Filter" />
         </form>
+
+        <button id="clean-data-button" class="button button-secondary" style="margin-top: 10px; margin-left: 10px;">Clean All Data</button>
+
+        <script type="text/javascript">
+            document.getElementById('clean-data-button').addEventListener('click', function() {
+                if (confirm('Are you sure you want to delete all data? This action cannot be undone.')) {
+                    var xhr = new XMLHttpRequest();
+                    xhr.open('POST', '<?php echo esc_js(admin_url('admin-ajax.php')); ?>', true);
+                    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+                    xhr.onload = function() {
+                        if (xhr.status === 200) {
+                            var response = JSON.parse(xhr.responseText);
+                            if (response.success) {
+                                alert(response.data);
+                                location.reload();
+                            } else {
+                                alert('Error: ' + response.data);
+                            }
+                        }
+                    };
+                    xhr.send('action=clean_webvitals_data&nonce=<?php echo esc_js(wp_create_nonce('wp-web-vitals-admin-nonce')); ?>');
+                }
+            });
+        </script>
 
 <?php
     if ($wpdb->last_error) {
