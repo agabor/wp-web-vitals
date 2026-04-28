@@ -244,18 +244,28 @@ function wp_web_vitals_admin_menu() {
     );
 }
 
+function wp_web_vitals_get_pages_with_data() {
+    global $wpdb;
+    $logs_table = wp_web_vitals_table_name();
+    $renders_table = wp_web_vitals_page_renders_table_name();
+
+    $results = $wpdb->get_results("
+        SELECT DISTINCT pr.id, pr.path
+        FROM $renders_table pr
+        INNER JOIN $logs_table wvl ON pr.id = wvl.page_render_id
+        ORDER BY pr.path ASC
+    ");
+
+    return $results;
+}
+
 function wp_web_vitals_admin_page() {
     global $wpdb;
     $table_name = wp_web_vitals_table_name();
 
     $selected_page_id = isset($_GET['page_id']) ? intval($_GET['page_id']) : 0;
 
-    $pages = $wpdb->get_results("
-        SELECT DISTINCT DATE(created_at) as date
-        FROM $table_name
-        WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-        ORDER BY date DESC
-    ");
+    $pages = wp_web_vitals_get_pages_with_data();
 
     $chart_data = wp_web_vitals_get_chart_data($selected_page_id);
 
@@ -286,6 +296,31 @@ function wp_web_vitals_admin_page() {
                     };
                     xhr.send('action=clean_webvitals_data&nonce=<?php echo esc_js(wp_create_nonce('wp-web-vitals-admin-nonce')); ?>');
                 }
+            });
+        </script>
+
+        <div style="margin-bottom: 30px;">
+            <label for="page-select" style="font-weight: bold; margin-right: 10px;">Select Page:</label>
+            <select id="page-select" style="padding: 5px 10px; font-size: 14px;">
+                <option value="">All Pages</option>
+                <?php foreach ($pages as $page) : ?>
+                    <option value="<?php echo intval($page->id); ?>" <?php selected($selected_page_id, $page->id); ?>>
+                        <?php echo esc_html($page->path); ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+
+        <script type="text/javascript">
+            document.getElementById('page-select').addEventListener('change', function() {
+                const pageId = this.value;
+                const url = new URL(window.location);
+                if (pageId) {
+                    url.searchParams.set('page_id', pageId);
+                } else {
+                    url.searchParams.delete('page_id');
+                }
+                window.location.href = url.toString();
             });
         </script>
 
@@ -392,21 +427,36 @@ function wp_web_vitals_admin_page() {
     <?php
 }
 
-function wp_web_vitals_get_chart_data($page_id = 0) {
+function wp_web_vitals_get_chart_data($page_render_id = 0) {
     global $wpdb;
     $table_name = wp_web_vitals_table_name();
 
-    $sql = $wpdb->prepare("
-        SELECT 
-            DATE(created_at) as date,
-            user_type,
-            AVG(fcp) as avg_fcp,
-            AVG(ttfb) as avg_ttfb
-        FROM $table_name
-        WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-        GROUP BY DATE(created_at), user_type
-        ORDER BY date DESC
-    ");
+    if ($page_render_id > 0) {
+        $sql = $wpdb->prepare("
+            SELECT 
+                DATE(created_at) as date,
+                user_type,
+                AVG(fcp) as avg_fcp,
+                AVG(ttfb) as avg_ttfb
+            FROM $table_name
+            WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+            AND page_render_id = %d
+            GROUP BY DATE(created_at), user_type
+            ORDER BY date DESC
+        ", $page_render_id);
+    } else {
+        $sql = "
+            SELECT 
+                DATE(created_at) as date,
+                user_type,
+                AVG(fcp) as avg_fcp,
+                AVG(ttfb) as avg_ttfb
+            FROM $table_name
+            WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+            GROUP BY DATE(created_at), user_type
+            ORDER BY date DESC
+        ";
+    }
 
     $results = $wpdb->get_results($sql);
 
