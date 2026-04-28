@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WP Web Vitals
  * Description: Logs Time to First Byte (TTFB), URL, User Type, and User Agent information.
- * Version: 0.2.0
+ * Version: 0.2.1
  * Author: Gabor Angyal
  * Author URI: https://woodevops.com
  * License: GPL3
@@ -87,7 +87,7 @@ register_deactivation_hook(__FILE__, 'wp_web_vitals_delete_table');
 add_action('wp_enqueue_scripts', 'wp_web_vitals_enqueue_script');
 
 function wp_web_vitals_enqueue_script() {
-    wp_enqueue_script('wp-web-vitals', plugin_dir_url(__FILE__) . 'wp-web-vitals.js', [], '1.0', true);
+    wp_enqueue_script('wp-web-vitals', plugin_dir_url(__FILE__) . 'wp-web-vitals.js', [], '0.2.1', true);
     wp_localize_script('wp-web-vitals', 'wpWebVitals', [
         'ajaxUrl' => admin_url('admin-ajax.php'),
         'nonce' => wp_create_nonce('wp-web-vitals-nonce')
