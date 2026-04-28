@@ -1,11 +1,12 @@
 document.addEventListener("DOMContentLoaded", function () {
     if (window.performance) {
         let measurements = {
-            ttfb: 0,
-            fcp: 0,
+            ttfb: -1,
+            fcp: -1,
             measurementSeconds: 0
         };
         const startTime = performance.now();
+        
         if (performance.getEntriesByType('navigation').length > 0) {
             const navigationEntry = performance.getEntriesByType('navigation')[0];
             measurements.ttfb = navigationEntry.responseStart - navigationEntry.requestStart;

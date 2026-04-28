@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WP Web Vitals
  * Description: Logs Time to First Byte (TTFB), URL, User Type, and User Agent information.
- * Version: 0.2.1
+ * Version: 0.2.2
  * Author: Gabor Angyal
  * Author URI: https://woodevops.com
  * License: GPL3
@@ -87,7 +87,7 @@ register_deactivation_hook(__FILE__, 'wp_web_vitals_delete_table');
 add_action('wp_enqueue_scripts', 'wp_web_vitals_enqueue_script');
 
 function wp_web_vitals_enqueue_script() {
-    wp_enqueue_script('wp-web-vitals', plugin_dir_url(__FILE__) . 'wp-web-vitals.js', [], '0.2.1', true);
+    wp_enqueue_script('wp-web-vitals', plugin_dir_url(__FILE__) . 'wp-web-vitals.js', [], '0.2.2', true);
     wp_localize_script('wp-web-vitals', 'wpWebVitals', [
         'ajaxUrl' => admin_url('admin-ajax.php'),
         'nonce' => wp_create_nonce('wp-web-vitals-nonce')
@@ -116,14 +116,18 @@ function wp_web_vitals_user_role_allowed($role) {
 function wp_web_vitals_log_webvitals() {
     check_ajax_referer('wp-web-vitals-nonce', 'nonce');
 
-    $ttfb = isset($_POST['ttfb']) ? floatval($_POST['ttfb']) : null;
-    $fcp = isset($_POST['fcp']) ? floatval($_POST['fcp']) : null;
-    $measurement_seconds = isset($_POST['measurementSeconds']) ? floatval($_POST['measurementSeconds']) : null;
+    $ttfb = isset($_POST['ttfb']) ? floatval($_POST['ttfb']) : -1;
+    $fcp = isset($_POST['fcp']) ? floatval($_POST['fcp']) : -1;
+    $measurement_seconds = isset($_POST['measurementSeconds']) ? floatval($_POST['measurementSeconds']) : 0;
     $user_type = isset($_POST['userType']) ? sanitize_text_field($_POST['userType']) : '';
     $url = isset($_POST['url']) ? sanitize_text_field($_POST['url']) : '';
 
-    if ($ttfb === null || empty($url)) {
+    if (empty($url)) {
         wp_send_json_error('Invalid data received.');
+    }
+
+    if ($ttfb === -1 && $fcp === -1) {
+        wp_send_json_error('At least one measurement (TTFB or FCP) must be available.');
     }
 
     if ($user_type === 'logged_in') {
@@ -394,8 +398,8 @@ function wp_web_vitals_get_chart_data($page_path = '') {
             SELECT 
                 DATE(created_at) as date,
                 user_type,
-                AVG(fcp) as avg_fcp,
-                AVG(ttfb) as avg_ttfb
+                AVG(CASE WHEN fcp >= 0 THEN fcp END) as avg_fcp,
+                AVG(CASE WHEN ttfb >= 0 THEN ttfb END) as avg_ttfb
             FROM $table_name
             WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
             AND path = %s
@@ -407,8 +411,8 @@ function wp_web_vitals_get_chart_data($page_path = '') {
             SELECT 
                 DATE(created_at) as date,
                 user_type,
-                AVG(fcp) as avg_fcp,
-                AVG(ttfb) as avg_ttfb
+                AVG(CASE WHEN fcp >= 0 THEN fcp END) as avg_fcp,
+                AVG(CASE WHEN ttfb >= 0 THEN ttfb END) as avg_ttfb
             FROM $table_name
             WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
             GROUP BY DATE(created_at), user_type
@@ -432,11 +436,11 @@ function wp_web_vitals_get_chart_data($page_path = '') {
         }
 
         if ($row->user_type === 'guest') {
-            $data_by_date[$row->date]['guest']['fcp'] = round(floatval($row->avg_fcp), 2);
-            $data_by_date[$row->date]['guest']['ttfb'] = round(floatval($row->avg_ttfb), 2);
+            $data_by_date[$row->date]['guest']['fcp'] = $row->avg_fcp !== null ? round(floatval($row->avg_fcp), 2) : null;
+            $data_by_date[$row->date]['guest']['ttfb'] = $row->avg_ttfb !== null ? round(floatval($row->avg_ttfb), 2) : null;
         } else {
-            $data_by_date[$row->date]['logged_in']['fcp'] = round(floatval($row->avg_fcp), 2);
-            $data_by_date[$row->date]['logged_in']['ttfb'] = round(floatval($row->avg_ttfb), 2);
+            $data_by_date[$row->date]['logged_in']['fcp'] = $row->avg_fcp !== null ? round(floatval($row->avg_fcp), 2) : null;
+            $data_by_date[$row->date]['logged_in']['ttfb'] = $row->avg_ttfb !== null ? round(floatval($row->avg_ttfb), 2) : null;
         }
     }
 
