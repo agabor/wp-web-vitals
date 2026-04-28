@@ -41,30 +41,15 @@ function wp_web_vitals_table_name() {
     return $wpdb->prefix . 'web_vitals_logs';
 }
 
-function wp_web_vitals_page_renders_table_name() {
-    global $wpdb;
-    return $wpdb->prefix . 'web_vitals_page_renders';
-}
-
 function wp_web_vitals_create_table() {
     global $wpdb;
     $table_name = wp_web_vitals_table_name();
-    $page_renders_table_name = wp_web_vitals_page_renders_table_name();
-
     $charset_collate = $wpdb->get_charset_collate();
-
-    $page_renders_sql = "CREATE TABLE $page_renders_table_name (
-        id mediumint(9) NOT NULL AUTO_INCREMENT,
-        uuid varchar(36) NOT NULL UNIQUE,
-        path text NOT NULL,
-        created_at datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
-        PRIMARY KEY (id),
-        INDEX idx_uuid (uuid)
-    ) $charset_collate;";
 
     $sql = "CREATE TABLE $table_name (
         id mediumint(9) NOT NULL AUTO_INCREMENT,
-        page_render_id mediumint(9) DEFAULT NULL,
+        uuid varchar(36) NOT NULL,
+        path text NOT NULL,
         ttfb float NOT NULL,
         fcp float NOT NULL,
         measurement_seconds float NOT NULL,
@@ -72,17 +57,11 @@ function wp_web_vitals_create_table() {
         url text NOT NULL,
         created_at datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
         PRIMARY KEY (id),
-        INDEX idx_page_render_id (page_render_id)
+        INDEX idx_uuid (uuid),
+        INDEX idx_created_at (created_at)
     ) $charset_collate;";
 
     require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
-    
-    dbDelta($page_renders_sql);
-    if ($wpdb->last_error) {
-        error_log("Error creating page renders table: " . $wpdb->last_error);
-    } else {
-        error_log("Page renders table created successfully or already exists.");
-    }
     
     dbDelta($sql);
     if ($wpdb->last_error) {
@@ -95,8 +74,6 @@ function wp_web_vitals_create_table() {
 function wp_web_vitals_delete_table() {
     global $wpdb;
     $table_name = wp_web_vitals_table_name();
-    $page_renders_table_name = wp_web_vitals_page_renders_table_name();
-
     $sql = "DROP TABLE IF EXISTS $table_name;";
     $wpdb->query($sql);
 
@@ -104,15 +81,6 @@ function wp_web_vitals_delete_table() {
         error_log("Error deleting web vitals logs table: " . $wpdb->last_error);
     } else {
         error_log("Web vitals logs table deleted successfully.");
-    }
-
-    $sql = "DROP TABLE IF EXISTS $page_renders_table_name;";
-    $wpdb->query($sql);
-
-    if ($wpdb->last_error) {
-        error_log("Error deleting page renders table: " . $wpdb->last_error);
-    } else {
-        error_log("Page renders table deleted successfully.");
     }
 }
 
@@ -128,34 +96,14 @@ function wp_web_vitals_generate_uuid() {
     );
 }
 
-function wp_web_vitals_create_page_render() {
-    global $wpdb;
-    $uuid = wp_web_vitals_generate_uuid();
-    $path = $_SERVER['REQUEST_URI'];
-    
-    $wpdb->insert(wp_web_vitals_page_renders_table_name(), [
-        'uuid' => $uuid,
-        'path' => $path,
-        'created_at' => current_time('mysql')
-    ]);
-    
-    if ($wpdb->last_error) {
-        error_log("Error creating page render record: " . $wpdb->last_error);
-        return null;
-    }
-    
-    return $uuid;
-}
-
 add_action('wp_enqueue_scripts', 'wp_web_vitals_enqueue_script');
-add_action('wp_head', 'wp_web_vitals_add_uuid_to_head');
 
 $wp_web_vitals_page_render_uuid = null;
 
 function wp_web_vitals_enqueue_script() {
     global $wp_web_vitals_page_render_uuid;
     
-    $wp_web_vitals_page_render_uuid = wp_web_vitals_create_page_render();
+    $wp_web_vitals_page_render_uuid = wp_web_vitals_generate_uuid();
     
     wp_enqueue_script('wp-web-vitals', plugin_dir_url(__FILE__) . 'wp-web-vitals.js', [], '1.0', true);
     wp_localize_script('wp-web-vitals', 'wpWebVitals', [
@@ -163,14 +111,6 @@ function wp_web_vitals_enqueue_script() {
         'nonce' => wp_create_nonce('wp-web-vitals-nonce'),
         'pageRenderUuid' => $wp_web_vitals_page_render_uuid
     ]);
-}
-
-function wp_web_vitals_add_uuid_to_head() {
-    global $wp_web_vitals_page_render_uuid;
-    
-    if ($wp_web_vitals_page_render_uuid) {
-        echo '<meta name="wp-web-vitals-uuid" content="' . esc_attr($wp_web_vitals_page_render_uuid) . '">' . "\n";
-    }
 }
 
 add_action('wp_ajax_nopriv_log_webvitals', 'wp_web_vitals_log_webvitals');
@@ -191,21 +131,11 @@ function wp_web_vitals_log_webvitals() {
     }
 
     global $wpdb;
-    
-    $page_render_id = null;
-    if (!empty($page_render_uuid)) {
-        $page_render_record = $wpdb->get_row($wpdb->prepare(
-            "SELECT id FROM " . wp_web_vitals_page_renders_table_name() . " WHERE uuid = %s",
-            $page_render_uuid
-        ));
-        
-        if ($page_render_record) {
-            $page_render_id = $page_render_record->id;
-        }
-    }
+    $path = isset($_SERVER['REQUEST_URI']) ? sanitize_text_field($_SERVER['REQUEST_URI']) : '';
 
     $wpdb->insert(wp_web_vitals_table_name(), [
-        'page_render_id' => $page_render_id,
+        'uuid' => $page_render_uuid,
+        'path' => $path,
         'ttfb' => $ttfb,
         'fcp' => $fcp,
         'measurement_seconds' => $measurement_seconds,
@@ -213,6 +143,7 @@ function wp_web_vitals_log_webvitals() {
         'user_type' => $user_type,
         'created_at' => current_time('mysql')
     ]);
+    
     if ($wpdb->last_error) {
         wp_send_json_error('Error logging performance data. ' . $wpdb->last_error);
     } else {
@@ -251,13 +182,11 @@ function wp_web_vitals_admin_menu() {
 function wp_web_vitals_get_pages_with_data() {
     global $wpdb;
     $logs_table = wp_web_vitals_table_name();
-    $renders_table = wp_web_vitals_page_renders_table_name();
 
     $results = $wpdb->get_results("
-        SELECT DISTINCT pr.id, pr.path
-        FROM $renders_table pr
-        INNER JOIN $logs_table wvl ON pr.id = wvl.page_render_id
-        ORDER BY pr.path ASC
+        SELECT DISTINCT path
+        FROM $logs_table
+        ORDER BY path ASC
     ");
 
     return $results;
@@ -267,11 +196,11 @@ function wp_web_vitals_admin_page() {
     global $wpdb;
     $table_name = wp_web_vitals_table_name();
 
-    $selected_page_id = isset($_GET['page_id']) ? intval($_GET['page_id']) : 0;
+    $selected_page = isset($_GET['page_path']) ? sanitize_text_field($_GET['page_path']) : '';
 
     $pages = wp_web_vitals_get_pages_with_data();
 
-    $chart_data = wp_web_vitals_get_chart_data($selected_page_id);
+    $chart_data = wp_web_vitals_get_chart_data($selected_page);
 
     wp_enqueue_script('chartjs', 'https://cdn.jsdelivr.net/npm/chart.js', [], '3.9.1', true);
     
@@ -407,7 +336,7 @@ function wp_web_vitals_admin_page() {
             <select id="page-select" style="padding: 5px 10px; font-size: 14px;">
                 <option value="">All Pages</option>
                 <?php foreach ($pages as $page) : ?>
-                    <option value="<?php echo intval($page->id); ?>" <?php selected($selected_page_id, $page->id); ?>>
+                    <option value="<?php echo esc_attr($page->path); ?>" <?php selected($selected_page, $page->path); ?>>
                         <?php echo esc_html($page->path); ?>
                     </option>
                 <?php endforeach; ?>
@@ -416,12 +345,12 @@ function wp_web_vitals_admin_page() {
 
         <script type="text/javascript">
             document.getElementById('page-select').addEventListener('change', function() {
-                const pageId = this.value;
+                const pagePath = this.value;
                 const url = new URL(window.location);
-                if (pageId) {
-                    url.searchParams.set('page_id', pageId);
+                if (pagePath) {
+                    url.searchParams.set('page_path', pagePath);
                 } else {
-                    url.searchParams.delete('page_id');
+                    url.searchParams.delete('page_path');
                 }
                 window.location.href = url.toString();
             });
@@ -440,11 +369,11 @@ function wp_web_vitals_admin_page() {
     <?php
 }
 
-function wp_web_vitals_get_chart_data($page_render_id = 0) {
+function wp_web_vitals_get_chart_data($page_path = '') {
     global $wpdb;
     $table_name = wp_web_vitals_table_name();
 
-    if ($page_render_id > 0) {
+    if (!empty($page_path)) {
         $sql = $wpdb->prepare("
             SELECT 
                 DATE(created_at) as date,
@@ -453,10 +382,10 @@ function wp_web_vitals_get_chart_data($page_render_id = 0) {
                 AVG(ttfb) as avg_ttfb
             FROM $table_name
             WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-            AND page_render_id = %d
+            AND path = %s
             GROUP BY DATE(created_at), user_type
             ORDER BY date DESC
-        ", $page_render_id);
+        ", $page_path);
     } else {
         $sql = "
             SELECT 
