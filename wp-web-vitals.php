@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WP Web Vitals
  * Description: Logs Time to First Byte (TTFB), URL, User Type, and User Agent information.
- * Version: 0.1.0
+ * Version: 0.2.0
  * Author: Gabor Angyal
  * Author URI: https://woodevops.com
  * License: GPL3
@@ -247,50 +247,25 @@ function wp_web_vitals_admin_menu() {
 function wp_web_vitals_admin_page() {
     global $wpdb;
     $table_name = wp_web_vitals_table_name();
-    $page_renders_table_name = wp_web_vitals_page_renders_table_name();
 
     $selected_page_id = isset($_GET['page_id']) ? intval($_GET['page_id']) : 0;
 
     $pages = $wpdb->get_results("
-        SELECT DISTINCT pr.id, pr.path
-        FROM $page_renders_table_name pr
-        INNER JOIN $table_name wvl ON pr.id = wvl.page_render_id
-        ORDER BY pr.path ASC
+        SELECT DISTINCT DATE(created_at) as date
+        FROM $table_name
+        WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+        ORDER BY date DESC
     ");
 
-    if ($selected_page_id > 0) {
-        $results = $wpdb->get_row($wpdb->prepare("
-            SELECT 
-                AVG(wvl.ttfb) as avg_ttfb,
-                AVG(wvl.fcp) as avg_fcp
-            FROM $table_name wvl
-            WHERE wvl.page_render_id = %d
-        ", $selected_page_id));
-    } else {
-        $results = null;
-    }
-?>
+    $chart_data = wp_web_vitals_get_chart_data($selected_page_id);
+
+    wp_enqueue_script('chartjs', 'https://cdn.jsdelivr.net/npm/chart.js', [], '3.9.1', true);
+    
+    ?>
     <div class="wrap">
-        <h1>Web Vitals Averages</h1>
+        <h1>Web Vitals Analytics</h1>
 
-        <form method="get">
-            <input type="hidden" name="page" value="web-vitals-averages" />
-            <label for="page_id">Select Page:</label>
-            <select name="page_id" id="page_id">
-                <option value="0">-- Select a Page --</option>
-<?php
-    if ($pages) {
-        foreach ($pages as $page) {
-            $selected = selected($page->id, $selected_page_id, false);
-            echo '<option value="' . esc_attr($page->id) . '" ' . $selected . '>' . esc_html($page->path) . '</option>';
-        }
-    }
-?>
-            </select>
-            <input type="submit" class="button" value="Filter" />
-        </form>
-
-        <button id="clean-data-button" class="button button-secondary" style="margin-top: 10px; margin-left: 10px;">Clean All Data</button>
+        <button id="clean-data-button" class="button button-secondary" style="margin-bottom: 20px;">Clean All Data</button>
 
         <script type="text/javascript">
             document.getElementById('clean-data-button').addEventListener('click', function() {
@@ -314,32 +289,169 @@ function wp_web_vitals_admin_page() {
             });
         </script>
 
-<?php
-    if ($wpdb->last_error) {
-        echo "<p>" . esc_html($wpdb->last_error) . "</p>";
-        return;
+        <div style="margin-bottom: 40px;">
+            <h2>First Contentful Paint (FCP) - Last 30 Days</h2>
+            <canvas id="fcpChart" style="max-width: 100%; height: 400px;"></canvas>
+        </div>
+
+        <div style="margin-bottom: 40px;">
+            <h2>Time to First Byte (TTFB) - Last 30 Days</h2>
+            <canvas id="ttfbChart" style="max-width: 100%; height: 400px;"></canvas>
+        </div>
+
+        <script type="text/javascript">
+            const chartData = <?php echo wp_json_encode($chart_data); ?>;
+
+            const fcpCtx = document.getElementById('fcpChart').getContext('2d');
+            new Chart(fcpCtx, {
+                type: 'bar',
+                data: {
+                    labels: chartData.dates,
+                    datasets: [
+                        {
+                            label: 'Guest Users (ms)',
+                            data: chartData.fcp_guest,
+                            backgroundColor: 'rgba(54, 162, 235, 0.7)',
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Logged-in Users (ms)',
+                            data: chartData.fcp_logged_in,
+                            backgroundColor: 'rgba(75, 192, 75, 0.7)',
+                            borderColor: 'rgba(75, 192, 75, 1)',
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Milliseconds'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        }
+                    }
+                }
+            });
+
+            const ttfbCtx = document.getElementById('ttfbChart').getContext('2d');
+            new Chart(ttfbCtx, {
+                type: 'bar',
+                data: {
+                    labels: chartData.dates,
+                    datasets: [
+                        {
+                            label: 'Guest Users (ms)',
+                            data: chartData.ttfb_guest,
+                            backgroundColor: 'rgba(255, 159, 64, 0.7)',
+                            borderColor: 'rgba(255, 159, 64, 1)',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Logged-in Users (ms)',
+                            data: chartData.ttfb_logged_in,
+                            backgroundColor: 'rgba(255, 99, 132, 0.7)',
+                            borderColor: 'rgba(255, 99, 132, 1)',
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Milliseconds'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        }
+                    }
+                }
+            });
+        </script>
+    </div>
+    <?php
+}
+
+function wp_web_vitals_get_chart_data($page_id = 0) {
+    global $wpdb;
+    $table_name = wp_web_vitals_table_name();
+
+    $sql = $wpdb->prepare("
+        SELECT 
+            DATE(created_at) as date,
+            user_type,
+            AVG(fcp) as avg_fcp,
+            AVG(ttfb) as avg_ttfb
+        FROM $table_name
+        WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+        GROUP BY DATE(created_at), user_type
+        ORDER BY date DESC
+    ");
+
+    $results = $wpdb->get_results($sql);
+
+    $dates_set = [];
+    $data_by_date = [];
+
+    foreach ($results as $row) {
+        $dates_set[$row->date] = true;
+        
+        if (!isset($data_by_date[$row->date])) {
+            $data_by_date[$row->date] = [
+                'guest' => ['fcp' => null, 'ttfb' => null],
+                'logged_in' => ['fcp' => null, 'ttfb' => null]
+            ];
+        }
+
+        if ($row->user_type === 'guest') {
+            $data_by_date[$row->date]['guest']['fcp'] = round(floatval($row->avg_fcp), 2);
+            $data_by_date[$row->date]['guest']['ttfb'] = round(floatval($row->avg_ttfb), 2);
+        } else {
+            $data_by_date[$row->date]['logged_in']['fcp'] = round(floatval($row->avg_fcp), 2);
+            $data_by_date[$row->date]['logged_in']['ttfb'] = round(floatval($row->avg_ttfb), 2);
+        }
     }
 
-    if ($selected_page_id > 0 && $results) {
-?>
-        <table class="widefat fixed" cellspacing="0">
-            <thead><tr><th>Metric</th><th>Average</th></tr></thead>
-            <tbody>
-                <tr><td>TTFB</td><td><?php echo esc_html(number_format($results->avg_ttfb, 2)); ?></td></tr>
-                <tr><td>FCP</td><td><?php echo esc_html(number_format($results->avg_fcp, 2)); ?></td></tr>
-            </tbody>
-        </table>
-<?php
-    } elseif ($selected_page_id > 0) {
-?>
-        <p>No data available for this page.</p>
-<?php
-    } else {
-?>
-        <p>Select a page to view averages.</p>
-<?php
+    $dates = array_keys($dates_set);
+    rsort($dates);
+
+    $fcp_guest = [];
+    $fcp_logged_in = [];
+    $ttfb_guest = [];
+    $ttfb_logged_in = [];
+
+    foreach ($dates as $date) {
+        $fcp_guest[] = $data_by_date[$date]['guest']['fcp'];
+        $fcp_logged_in[] = $data_by_date[$date]['logged_in']['fcp'];
+        $ttfb_guest[] = $data_by_date[$date]['guest']['ttfb'];
+        $ttfb_logged_in[] = $data_by_date[$date]['logged_in']['ttfb'];
     }
-?>
-    </div>
-<?php
+
+    return [
+        'dates' => $dates,
+        'fcp_guest' => $fcp_guest,
+        'fcp_logged_in' => $fcp_logged_in,
+        'ttfb_guest' => $ttfb_guest,
+        'ttfb_logged_in' => $ttfb_logged_in
+    ];
 }
