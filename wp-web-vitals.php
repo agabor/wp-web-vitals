@@ -48,7 +48,6 @@ function wp_web_vitals_create_table() {
 
     $sql = "CREATE TABLE $table_name (
         id mediumint(9) NOT NULL AUTO_INCREMENT,
-        uuid varchar(36) NOT NULL,
         path text NOT NULL,
         ttfb float NOT NULL,
         fcp float NOT NULL,
@@ -57,7 +56,6 @@ function wp_web_vitals_create_table() {
         url text NOT NULL,
         created_at datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
         PRIMARY KEY (id),
-        INDEX idx_uuid (uuid),
         INDEX idx_created_at (created_at)
     ) $charset_collate;";
 
@@ -86,30 +84,13 @@ function wp_web_vitals_delete_table() {
 
 register_deactivation_hook(__FILE__, 'wp_web_vitals_delete_table');
 
-function wp_web_vitals_generate_uuid() {
-    return sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
-        mt_rand(0, 0xffff), mt_rand(0, 0xffff),
-        mt_rand(0, 0xffff),
-        mt_rand(0, 0x0fff) | 0x4000,
-        mt_rand(0, 0x3fff) | 0x8000,
-        mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
-    );
-}
-
 add_action('wp_enqueue_scripts', 'wp_web_vitals_enqueue_script');
 
-$wp_web_vitals_page_render_uuid = null;
-
 function wp_web_vitals_enqueue_script() {
-    global $wp_web_vitals_page_render_uuid;
-    
-    $wp_web_vitals_page_render_uuid = wp_web_vitals_generate_uuid();
-    
     wp_enqueue_script('wp-web-vitals', plugin_dir_url(__FILE__) . 'wp-web-vitals.js', [], '1.0', true);
     wp_localize_script('wp-web-vitals', 'wpWebVitals', [
         'ajaxUrl' => admin_url('admin-ajax.php'),
-        'nonce' => wp_create_nonce('wp-web-vitals-nonce'),
-        'pageRenderUuid' => $wp_web_vitals_page_render_uuid
+        'nonce' => wp_create_nonce('wp-web-vitals-nonce')
     ]);
 }
 
@@ -124,7 +105,6 @@ function wp_web_vitals_log_webvitals() {
     $measurement_seconds = isset($_POST['measurementSeconds']) ? floatval($_POST['measurementSeconds']) : null;
     $user_type = isset($_POST['userType']) ? sanitize_text_field($_POST['userType']) : '';
     $url = isset($_POST['url']) ? sanitize_text_field($_POST['url']) : '';
-    $page_render_uuid = isset($_POST['pageRenderUuid']) ? sanitize_text_field($_POST['pageRenderUuid']) : '';
 
     if ($ttfb === null || empty($url)) {
         wp_send_json_error('Invalid data received.');
@@ -134,7 +114,6 @@ function wp_web_vitals_log_webvitals() {
     $path = isset($_SERVER['REQUEST_URI']) ? sanitize_text_field($_SERVER['REQUEST_URI']) : '';
 
     $wpdb->insert(wp_web_vitals_table_name(), [
-        'uuid' => $page_render_uuid,
         'path' => $path,
         'ttfb' => $ttfb,
         'fcp' => $fcp,
