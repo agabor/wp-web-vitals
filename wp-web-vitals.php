@@ -237,16 +237,30 @@ function wp_web_vitals_admin_page() {
                 labels: chartData.dates,
                 datasets: [
                     {
-                        label: 'Guest Users (ms)',
-                        data: chartData.fcp_guest,
+                        label: 'Guest (no query)',
+                        data: chartData.fcp_guest_no_query,
                         backgroundColor: 'rgba(54, 162, 235, 0.7)',
                         borderColor: 'rgba(54, 162, 235, 1)',
                         borderWidth: 1
                     },
                     {
-                        label: 'Logged-in Users (ms)',
-                        data: chartData.fcp_logged_in,
+                        label: 'Guest (with query)',
+                        data: chartData.fcp_guest_with_query,
+                        backgroundColor: 'rgba(54, 162, 235, 0.4)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Logged-in (no query)',
+                        data: chartData.fcp_logged_in_no_query,
                         backgroundColor: 'rgba(75, 192, 75, 0.7)',
+                        borderColor: 'rgba(75, 192, 75, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Logged-in (with query)',
+                        data: chartData.fcp_logged_in_with_query,
+                        backgroundColor: 'rgba(75, 192, 75, 0.4)',
                         borderColor: 'rgba(75, 192, 75, 1)',
                         borderWidth: 1
                     }
@@ -280,16 +294,30 @@ function wp_web_vitals_admin_page() {
                 labels: chartData.dates,
                 datasets: [
                     {
-                        label: 'Guest Users (ms)',
-                        data: chartData.ttfb_guest,
+                        label: 'Guest (no query)',
+                        data: chartData.ttfb_guest_no_query,
                         backgroundColor: 'rgba(255, 159, 64, 0.7)',
                         borderColor: 'rgba(255, 159, 64, 1)',
                         borderWidth: 1
                     },
                     {
-                        label: 'Logged-in Users (ms)',
-                        data: chartData.ttfb_logged_in,
+                        label: 'Guest (with query)',
+                        data: chartData.ttfb_guest_with_query,
+                        backgroundColor: 'rgba(255, 159, 64, 0.4)',
+                        borderColor: 'rgba(255, 159, 64, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Logged-in (no query)',
+                        data: chartData.ttfb_logged_in_no_query,
                         backgroundColor: 'rgba(255, 99, 132, 0.7)',
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Logged-in (with query)',
+                        data: chartData.ttfb_logged_in_with_query,
+                        backgroundColor: 'rgba(255, 99, 132, 0.4)',
                         borderColor: 'rgba(255, 99, 132, 1)',
                         borderWidth: 1
                     }
@@ -398,12 +426,13 @@ function wp_web_vitals_get_chart_data($page_path = '') {
             SELECT 
                 DATE(created_at) as date,
                 user_type,
+                CASE WHEN url LIKE '%?%' THEN 'with_query' ELSE 'no_query' END as has_query,
                 AVG(CASE WHEN fcp >= 0 THEN fcp END) as avg_fcp,
                 AVG(CASE WHEN ttfb >= 0 THEN ttfb END) as avg_ttfb
             FROM $table_name
             WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
             AND path = %s
-            GROUP BY DATE(created_at), user_type
+            GROUP BY DATE(created_at), user_type, has_query
             ORDER BY date DESC
         ", $page_path);
     } else {
@@ -411,11 +440,12 @@ function wp_web_vitals_get_chart_data($page_path = '') {
             SELECT 
                 DATE(created_at) as date,
                 user_type,
+                CASE WHEN url LIKE '%?%' THEN 'with_query' ELSE 'no_query' END as has_query,
                 AVG(CASE WHEN fcp >= 0 THEN fcp END) as avg_fcp,
                 AVG(CASE WHEN ttfb >= 0 THEN ttfb END) as avg_ttfb
             FROM $table_name
             WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-            GROUP BY DATE(created_at), user_type
+            GROUP BY DATE(created_at), user_type, has_query
             ORDER BY date DESC
         ";
     }
@@ -430,40 +460,51 @@ function wp_web_vitals_get_chart_data($page_path = '') {
         
         if (!isset($data_by_date[$row->date])) {
             $data_by_date[$row->date] = [
-                'guest' => ['fcp' => null, 'ttfb' => null],
-                'logged_in' => ['fcp' => null, 'ttfb' => null]
+                'guest_no_query' => ['fcp' => null, 'ttfb' => null],
+                'guest_with_query' => ['fcp' => null, 'ttfb' => null],
+                'logged_in_no_query' => ['fcp' => null, 'ttfb' => null],
+                'logged_in_with_query' => ['fcp' => null, 'ttfb' => null]
             ];
         }
 
-        if ($row->user_type === 'guest') {
-            $data_by_date[$row->date]['guest']['fcp'] = $row->avg_fcp !== null ? round(floatval($row->avg_fcp), 2) : null;
-            $data_by_date[$row->date]['guest']['ttfb'] = $row->avg_ttfb !== null ? round(floatval($row->avg_ttfb), 2) : null;
-        } else {
-            $data_by_date[$row->date]['logged_in']['fcp'] = $row->avg_fcp !== null ? round(floatval($row->avg_fcp), 2) : null;
-            $data_by_date[$row->date]['logged_in']['ttfb'] = $row->avg_ttfb !== null ? round(floatval($row->avg_ttfb), 2) : null;
-        }
+        $key = $row->user_type . '_' . $row->has_query;
+        
+        $data_by_date[$row->date][$key]['fcp'] = $row->avg_fcp !== null ? round(floatval($row->avg_fcp), 2) : null;
+        $data_by_date[$row->date][$key]['ttfb'] = $row->avg_ttfb !== null ? round(floatval($row->avg_ttfb), 2) : null;
     }
 
     $dates = array_keys($dates_set);
     rsort($dates);
 
-    $fcp_guest = [];
-    $fcp_logged_in = [];
-    $ttfb_guest = [];
-    $ttfb_logged_in = [];
+    $fcp_guest_no_query = [];
+    $fcp_guest_with_query = [];
+    $fcp_logged_in_no_query = [];
+    $fcp_logged_in_with_query = [];
+    $ttfb_guest_no_query = [];
+    $ttfb_guest_with_query = [];
+    $ttfb_logged_in_no_query = [];
+    $ttfb_logged_in_with_query = [];
 
     foreach ($dates as $date) {
-        $fcp_guest[] = $data_by_date[$date]['guest']['fcp'];
-        $fcp_logged_in[] = $data_by_date[$date]['logged_in']['fcp'];
-        $ttfb_guest[] = $data_by_date[$date]['guest']['ttfb'];
-        $ttfb_logged_in[] = $data_by_date[$date]['logged_in']['ttfb'];
+        $fcp_guest_no_query[] = $data_by_date[$date]['guest_no_query']['fcp'];
+        $fcp_guest_with_query[] = $data_by_date[$date]['guest_with_query']['fcp'];
+        $fcp_logged_in_no_query[] = $data_by_date[$date]['logged_in_no_query']['fcp'];
+        $fcp_logged_in_with_query[] = $data_by_date[$date]['logged_in_with_query']['fcp'];
+        $ttfb_guest_no_query[] = $data_by_date[$date]['guest_no_query']['ttfb'];
+        $ttfb_guest_with_query[] = $data_by_date[$date]['guest_with_query']['ttfb'];
+        $ttfb_logged_in_no_query[] = $data_by_date[$date]['logged_in_no_query']['ttfb'];
+        $ttfb_logged_in_with_query[] = $data_by_date[$date]['logged_in_with_query']['ttfb'];
     }
 
     return [
         'dates' => $dates,
-        'fcp_guest' => $fcp_guest,
-        'fcp_logged_in' => $fcp_logged_in,
-        'ttfb_guest' => $ttfb_guest,
-        'ttfb_logged_in' => $ttfb_logged_in
+        'fcp_guest_no_query' => $fcp_guest_no_query,
+        'fcp_guest_with_query' => $fcp_guest_with_query,
+        'fcp_logged_in_no_query' => $fcp_logged_in_no_query,
+        'fcp_logged_in_with_query' => $fcp_logged_in_with_query,
+        'ttfb_guest_no_query' => $ttfb_guest_no_query,
+        'ttfb_guest_with_query' => $ttfb_guest_with_query,
+        'ttfb_logged_in_no_query' => $ttfb_logged_in_no_query,
+        'ttfb_logged_in_with_query' => $ttfb_logged_in_with_query
     ];
 }
