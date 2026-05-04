@@ -397,68 +397,8 @@ function wp_web_vitals_admin_page() {
             }
         });
 
-        const fcpCountCtx = document.getElementById('fcpCountChart').getContext('2d');
-        new Chart(fcpCountCtx, {
-            type: 'bar',
-            data: {
-                labels: chartData.dates,
-                datasets: [
-                    {
-                        label: 'Guest (no query)',
-                        data: chartData.fcp_count_guest_no_query,
-                        backgroundColor: 'rgba(54, 162, 235, 0.7)',
-                        borderColor: 'rgba(54, 162, 235, 1)',
-                        borderWidth: 1
-                    },
-                    {
-                        label: 'Guest (with query)',
-                        data: chartData.fcp_count_guest_with_query,
-                        backgroundColor: 'rgba(54, 162, 235, 0.4)',
-                        borderColor: 'rgba(54, 162, 235, 1)',
-                        borderWidth: 1
-                    },
-                    {
-                        label: 'Logged-in (no query)',
-                        data: chartData.fcp_count_logged_in_no_query,
-                        backgroundColor: 'rgba(75, 192, 75, 0.7)',
-                        borderColor: 'rgba(75, 192, 75, 1)',
-                        borderWidth: 1
-                    },
-                    {
-                        label: 'Logged-in (with query)',
-                        data: chartData.fcp_count_logged_in_with_query,
-                        backgroundColor: 'rgba(75, 192, 75, 0.4)',
-                        borderColor: 'rgba(75, 192, 75, 1)',
-                        borderWidth: 1
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            stepSize: 1
-                        },
-                        title: {
-                            display: true,
-                            text: 'Request Count'
-                        }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'top'
-                    }
-                }
-            }
-        });
-
-        const ttfbCountCtx = document.getElementById('ttfbCountChart').getContext('2d');
-        new Chart(ttfbCountCtx, {
+        const requestCountCtx = document.getElementById('requestCountChart').getContext('2d');
+        new Chart(requestCountCtx, {
             type: 'bar',
             data: {
                 labels: chartData.dates,
@@ -466,29 +406,29 @@ function wp_web_vitals_admin_page() {
                     {
                         label: 'Guest (no query)',
                         data: chartData.ttfb_count_guest_no_query,
-                        backgroundColor: 'rgba(255, 159, 64, 0.7)',
-                        borderColor: 'rgba(255, 159, 64, 1)',
+                        backgroundColor: 'rgba(155, 89, 182, 0.7)',
+                        borderColor: 'rgba(155, 89, 182, 1)',
                         borderWidth: 1
                     },
                     {
                         label: 'Guest (with query)',
                         data: chartData.ttfb_count_guest_with_query,
-                        backgroundColor: 'rgba(255, 159, 64, 0.4)',
-                        borderColor: 'rgba(255, 159, 64, 1)',
+                        backgroundColor: 'rgba(155, 89, 182, 0.4)',
+                        borderColor: 'rgba(155, 89, 182, 1)',
                         borderWidth: 1
                     },
                     {
                         label: 'Logged-in (no query)',
                         data: chartData.ttfb_count_logged_in_no_query,
-                        backgroundColor: 'rgba(255, 99, 132, 0.7)',
-                        borderColor: 'rgba(255, 99, 132, 1)',
+                        backgroundColor: 'rgba(52, 152, 219, 0.7)',
+                        borderColor: 'rgba(52, 152, 219, 1)',
                         borderWidth: 1
                     },
                     {
                         label: 'Logged-in (with query)',
                         data: chartData.ttfb_count_logged_in_with_query,
-                        backgroundColor: 'rgba(255, 99, 132, 0.4)',
-                        borderColor: 'rgba(255, 99, 132, 1)',
+                        backgroundColor: 'rgba(52, 152, 219, 0.4)',
+                        borderColor: 'rgba(52, 152, 219, 1)',
                         borderWidth: 1
                     }
                 ]
@@ -612,18 +552,13 @@ function wp_web_vitals_admin_page() {
         </div>
 
         <div style="<?php echo esc_attr($chart_container_style); ?>">
-            <h2>FCP Request Count - Last 30 Days</h2>
-            <canvas id="fcpCountChart" style="<?php echo esc_attr($canvas_style); ?>"></canvas>
-        </div>
-
-        <div style="<?php echo esc_attr($chart_container_style); ?>">
             <h2>Time to First Byte (TTFB) - Last 30 Days</h2>
             <canvas id="ttfbChart" style="<?php echo esc_attr($canvas_style); ?>"></canvas>
         </div>
 
         <div style="<?php echo esc_attr($chart_container_style); ?>">
-            <h2>TTFB Request Count - Last 30 Days</h2>
-            <canvas id="ttfbCountChart" style="<?php echo esc_attr($canvas_style); ?>"></canvas>
+            <h2>Request Count - Last 30 Days</h2>
+            <canvas id="requestCountChart" style="<?php echo esc_attr($canvas_style); ?>"></canvas>
         </div>
     </div>
     <?php
@@ -717,10 +652,6 @@ function wp_web_vitals_get_chart_data($page_path = '') {
     $ttfb_guest_with_query = [];
     $ttfb_logged_in_no_query = [];
     $ttfb_logged_in_with_query = [];
-    $fcp_count_guest_no_query = [];
-    $fcp_count_guest_with_query = [];
-    $fcp_count_logged_in_no_query = [];
-    $fcp_count_logged_in_with_query = [];
     $ttfb_count_guest_no_query = [];
     $ttfb_count_guest_with_query = [];
     $ttfb_count_logged_in_no_query = [];
@@ -735,10 +666,6 @@ function wp_web_vitals_get_chart_data($page_path = '') {
         $ttfb_guest_with_query[] = $data_by_date[$date]['guest_with_query']['ttfb'];
         $ttfb_logged_in_no_query[] = $data_by_date[$date]['logged_in_no_query']['ttfb'];
         $ttfb_logged_in_with_query[] = $data_by_date[$date]['logged_in_with_query']['ttfb'];
-        $fcp_count_guest_no_query[] = $data_by_date[$date]['guest_no_query']['count'];
-        $fcp_count_guest_with_query[] = $data_by_date[$date]['guest_with_query']['count'];
-        $fcp_count_logged_in_no_query[] = $data_by_date[$date]['logged_in_no_query']['count'];
-        $fcp_count_logged_in_with_query[] = $data_by_date[$date]['logged_in_with_query']['count'];
         $ttfb_count_guest_no_query[] = $data_by_date[$date]['guest_no_query']['count'];
         $ttfb_count_guest_with_query[] = $data_by_date[$date]['guest_with_query']['count'];
         $ttfb_count_logged_in_no_query[] = $data_by_date[$date]['logged_in_no_query']['count'];
@@ -755,10 +682,6 @@ function wp_web_vitals_get_chart_data($page_path = '') {
         'ttfb_guest_with_query' => $ttfb_guest_with_query,
         'ttfb_logged_in_no_query' => $ttfb_logged_in_no_query,
         'ttfb_logged_in_with_query' => $ttfb_logged_in_with_query,
-        'fcp_count_guest_no_query' => $fcp_count_guest_no_query,
-        'fcp_count_guest_with_query' => $fcp_count_guest_with_query,
-        'fcp_count_logged_in_no_query' => $fcp_count_logged_in_no_query,
-        'fcp_count_logged_in_with_query' => $fcp_count_logged_in_with_query,
         'ttfb_count_guest_no_query' => $ttfb_count_guest_no_query,
         'ttfb_count_guest_with_query' => $ttfb_count_guest_with_query,
         'ttfb_count_logged_in_no_query' => $ttfb_count_logged_in_no_query,
