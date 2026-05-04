@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WP Web Vitals
  * Description: Logs Time to First Byte (TTFB), URL, User Type, and User Agent information.
- * Version: 0.2.2
+ * Version: 0.2.3
  * Author: Gabor Angyal
  * Author URI: https://woodevops.com
  * License: GPL3
@@ -84,10 +84,29 @@ function wp_web_vitals_delete_table() {
 
 register_deactivation_hook(__FILE__, 'wp_web_vitals_delete_table');
 
+function wp_web_vitals_get_path_prefix() {
+    return get_option('wp_web_vitals_path_prefix', '');
+}
+
+function wp_web_vitals_should_load_script() {
+    $prefix = wp_web_vitals_get_path_prefix();
+    
+    if (empty($prefix)) {
+        return true;
+    }
+    
+    $current_path = wp_parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+    return strpos($current_path, $prefix) === 0;
+}
+
 add_action('wp_enqueue_scripts', 'wp_web_vitals_enqueue_script');
 
 function wp_web_vitals_enqueue_script() {
-    wp_enqueue_script('wp-web-vitals', plugin_dir_url(__FILE__) . 'wp-web-vitals.js', [], '0.2.2', true);
+    if (!wp_web_vitals_should_load_script()) {
+        return;
+    }
+    
+    wp_enqueue_script('wp-web-vitals', plugin_dir_url(__FILE__) . 'wp-web-vitals.js', [], '0.2.3', true);
     wp_localize_script('wp-web-vitals', 'wpWebVitals', [
         'ajaxUrl' => admin_url('admin-ajax.php'),
         'nonce' => wp_create_nonce('wp-web-vitals-nonce')
@@ -124,6 +143,14 @@ function wp_web_vitals_log_webvitals() {
 
     if (empty($url)) {
         wp_send_json_error('Invalid data received.');
+    }
+
+    $prefix = wp_web_vitals_get_path_prefix();
+    if (!empty($prefix)) {
+        $path = wp_parse_url($url, PHP_URL_PATH);
+        if (strpos($path, $prefix) !== 0) {
+            wp_send_json_error('URL does not match the configured path prefix.');
+        }
     }
 
     if ($ttfb === -1 && $fcp === -1) {
@@ -186,6 +213,30 @@ function wp_web_vitals_clean_data() {
     wp_send_json_success('All data has been cleaned and tables have been recreated.');
 }
 
+add_action('wp_ajax_save_webvitals_settings', 'wp_web_vitals_save_settings');
+
+function wp_web_vitals_save_settings() {
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('Insufficient permissions.');
+    }
+
+    check_ajax_referer('wp-web-vitals-admin-nonce', 'nonce');
+
+    $prefix = isset($_POST['path_prefix']) ? sanitize_text_field($_POST['path_prefix']) : '';
+    
+    if (!empty($prefix)) {
+        if (substr($prefix, 0, 1) !== '/') {
+            wp_send_json_error('Path prefix must start with / (forward slash).');
+        }
+        if (substr($prefix, -1) === '/') {
+            $prefix = rtrim($prefix, '/');
+        }
+    }
+    
+    update_option('wp_web_vitals_path_prefix', $prefix);
+    wp_send_json_success('Settings saved successfully.');
+}
+
 add_action('admin_menu', 'wp_web_vitals_admin_menu');
 
 function wp_web_vitals_admin_menu() {
@@ -221,6 +272,8 @@ function wp_web_vitals_admin_page() {
     $pages = wp_web_vitals_get_pages_with_data();
 
     $chart_data = wp_web_vitals_get_chart_data($selected_page);
+    
+    $current_prefix = wp_web_vitals_get_path_prefix();
 
     wp_enqueue_script('chartjs', 'https://cdn.jsdelivr.net/npm/chart.js', [], '3.9.1', true);
     
@@ -354,6 +407,35 @@ function wp_web_vitals_admin_page() {
     ?>
     <div class="wrap">
         <h1>Web Vitals Analytics</h1>
+
+        <div style="margin-bottom: 30px; padding: 15px; background-color: #f5f5f5; border-left: 4px solid #0073aa;">
+            <h2 style="margin-top: 0;">Settings</h2>
+            <label for="path-prefix-input" style="display: block; margin-bottom: 10px; font-weight: bold;">Path Prefix (optional):</label>
+            <input type="text" id="path-prefix-input" value="<?php echo esc_attr($current_prefix); ?>" placeholder="/blog" style="padding: 8px 12px; font-size: 14px; width: 300px; max-width: 100%; margin-right: 10px;">
+            <button id="save-settings-button" class="button button-primary" style="margin-bottom: 5px;">Save Settings</button>
+            <p style="margin-top: 10px; font-size: 12px; color: #666;">Leave empty to track all pages. Add a prefix like /blog to track only pages starting with that path.</p>
+        </div>
+
+        <script type="text/javascript">
+            document.getElementById('save-settings-button').addEventListener('click', function() {
+                var pathPrefix = document.getElementById('path-prefix-input').value.trim();
+                var xhr = new XMLHttpRequest();
+                xhr.open('POST', '<?php echo esc_js(admin_url('admin-ajax.php')); ?>', true);
+                xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+                xhr.onload = function() {
+                    if (xhr.status === 200) {
+                        var response = JSON.parse(xhr.responseText);
+                        if (response.success) {
+                            alert(response.data);
+                            location.reload();
+                        } else {
+                            alert('Error: ' + response.data);
+                        }
+                    }
+                };
+                xhr.send('action=save_webvitals_settings&path_prefix=' + encodeURIComponent(pathPrefix) + '&nonce=<?php echo esc_js(wp_create_nonce('wp-web-vitals-admin-nonce')); ?>');
+            });
+        </script>
 
         <button id="clean-data-button" class="button button-secondary" style="margin-bottom: 20px;">Clean All Data</button>
 
