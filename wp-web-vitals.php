@@ -396,6 +396,126 @@ function wp_web_vitals_admin_page() {
                 }
             }
         });
+
+        const fcpCountCtx = document.getElementById('fcpCountChart').getContext('2d');
+        new Chart(fcpCountCtx, {
+            type: 'bar',
+            data: {
+                labels: chartData.dates,
+                datasets: [
+                    {
+                        label: 'Guest (no query)',
+                        data: chartData.fcp_count_guest_no_query,
+                        backgroundColor: 'rgba(54, 162, 235, 0.7)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Guest (with query)',
+                        data: chartData.fcp_count_guest_with_query,
+                        backgroundColor: 'rgba(54, 162, 235, 0.4)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Logged-in (no query)',
+                        data: chartData.fcp_count_logged_in_no_query,
+                        backgroundColor: 'rgba(75, 192, 75, 0.7)',
+                        borderColor: 'rgba(75, 192, 75, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Logged-in (with query)',
+                        data: chartData.fcp_count_logged_in_with_query,
+                        backgroundColor: 'rgba(75, 192, 75, 0.4)',
+                        borderColor: 'rgba(75, 192, 75, 1)',
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        },
+                        title: {
+                            display: true,
+                            text: 'Request Count'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    }
+                }
+            }
+        });
+
+        const ttfbCountCtx = document.getElementById('ttfbCountChart').getContext('2d');
+        new Chart(ttfbCountCtx, {
+            type: 'bar',
+            data: {
+                labels: chartData.dates,
+                datasets: [
+                    {
+                        label: 'Guest (no query)',
+                        data: chartData.ttfb_count_guest_no_query,
+                        backgroundColor: 'rgba(255, 159, 64, 0.7)',
+                        borderColor: 'rgba(255, 159, 64, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Guest (with query)',
+                        data: chartData.ttfb_count_guest_with_query,
+                        backgroundColor: 'rgba(255, 159, 64, 0.4)',
+                        borderColor: 'rgba(255, 159, 64, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Logged-in (no query)',
+                        data: chartData.ttfb_count_logged_in_no_query,
+                        backgroundColor: 'rgba(255, 99, 132, 0.7)',
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Logged-in (with query)',
+                        data: chartData.ttfb_count_logged_in_with_query,
+                        backgroundColor: 'rgba(255, 99, 132, 0.4)',
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        },
+                        title: {
+                            display: true,
+                            text: 'Request Count'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    }
+                }
+            }
+        });
     ";
     
     wp_add_inline_script('chartjs', $inline_script);
@@ -492,11 +612,39 @@ function wp_web_vitals_admin_page() {
         </div>
 
         <div style="<?php echo esc_attr($chart_container_style); ?>">
+            <h2>FCP Request Count - Last 30 Days</h2>
+            <canvas id="fcpCountChart" style="<?php echo esc_attr($canvas_style); ?>"></canvas>
+        </div>
+
+        <div style="<?php echo esc_attr($chart_container_style); ?>">
             <h2>Time to First Byte (TTFB) - Last 30 Days</h2>
             <canvas id="ttfbChart" style="<?php echo esc_attr($canvas_style); ?>"></canvas>
         </div>
+
+        <div style="<?php echo esc_attr($chart_container_style); ?>">
+            <h2>TTFB Request Count - Last 30 Days</h2>
+            <canvas id="ttfbCountChart" style="<?php echo esc_attr($canvas_style); ?>"></canvas>
+        </div>
     </div>
     <?php
+}
+
+function wp_web_vitals_calculate_median($values_string) {
+    if (empty($values_string)) {
+        return null;
+    }
+    
+    $values = array_map('floatval', explode(',', $values_string));
+    sort($values);
+    
+    $count = count($values);
+    $mid = floor(($count - 1) / 2);
+    
+    if ($count % 2) {
+        return round($values[$mid], 2);
+    }
+    
+    return round(($values[$mid] + $values[$mid + 1]) / 2, 2);
 }
 
 function wp_web_vitals_get_chart_data($page_path = '') {
@@ -509,8 +657,9 @@ function wp_web_vitals_get_chart_data($page_path = '') {
                 DATE(created_at) as date,
                 user_type,
                 CASE WHEN url LIKE '%?%' THEN 'with_query' ELSE 'no_query' END as has_query,
-                AVG(CASE WHEN fcp >= 0 THEN fcp END) as avg_fcp,
-                AVG(CASE WHEN ttfb >= 0 THEN ttfb END) as avg_ttfb
+                GROUP_CONCAT(CASE WHEN fcp >= 0 THEN fcp END ORDER BY CASE WHEN fcp >= 0 THEN fcp END SEPARATOR ',') as fcp_values,
+                GROUP_CONCAT(CASE WHEN ttfb >= 0 THEN ttfb END ORDER BY CASE WHEN ttfb >= 0 THEN ttfb END SEPARATOR ',') as ttfb_values,
+                COUNT(*) as request_count
             FROM $table_name
             WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
             AND path = %s
@@ -523,8 +672,9 @@ function wp_web_vitals_get_chart_data($page_path = '') {
                 DATE(created_at) as date,
                 user_type,
                 CASE WHEN url LIKE '%?%' THEN 'with_query' ELSE 'no_query' END as has_query,
-                AVG(CASE WHEN fcp >= 0 THEN fcp END) as avg_fcp,
-                AVG(CASE WHEN ttfb >= 0 THEN ttfb END) as avg_ttfb
+                GROUP_CONCAT(CASE WHEN fcp >= 0 THEN fcp END ORDER BY CASE WHEN fcp >= 0 THEN fcp END SEPARATOR ',') as fcp_values,
+                GROUP_CONCAT(CASE WHEN ttfb >= 0 THEN ttfb END ORDER BY CASE WHEN ttfb >= 0 THEN ttfb END SEPARATOR ',') as ttfb_values,
+                COUNT(*) as request_count
             FROM $table_name
             WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
             GROUP BY DATE(created_at), user_type, has_query
@@ -542,17 +692,18 @@ function wp_web_vitals_get_chart_data($page_path = '') {
         
         if (!isset($data_by_date[$row->date])) {
             $data_by_date[$row->date] = [
-                'guest_no_query' => ['fcp' => null, 'ttfb' => null],
-                'guest_with_query' => ['fcp' => null, 'ttfb' => null],
-                'logged_in_no_query' => ['fcp' => null, 'ttfb' => null],
-                'logged_in_with_query' => ['fcp' => null, 'ttfb' => null]
+                'guest_no_query' => ['fcp' => null, 'ttfb' => null, 'count' => 0],
+                'guest_with_query' => ['fcp' => null, 'ttfb' => null, 'count' => 0],
+                'logged_in_no_query' => ['fcp' => null, 'ttfb' => null, 'count' => 0],
+                'logged_in_with_query' => ['fcp' => null, 'ttfb' => null, 'count' => 0]
             ];
         }
 
         $key = $row->user_type . '_' . $row->has_query;
         
-        $data_by_date[$row->date][$key]['fcp'] = $row->avg_fcp !== null ? round(floatval($row->avg_fcp), 2) : null;
-        $data_by_date[$row->date][$key]['ttfb'] = $row->avg_ttfb !== null ? round(floatval($row->avg_ttfb), 2) : null;
+        $data_by_date[$row->date][$key]['fcp'] = wp_web_vitals_calculate_median($row->fcp_values);
+        $data_by_date[$row->date][$key]['ttfb'] = wp_web_vitals_calculate_median($row->ttfb_values);
+        $data_by_date[$row->date][$key]['count'] = intval($row->request_count);
     }
 
     $dates = array_keys($dates_set);
@@ -566,6 +717,14 @@ function wp_web_vitals_get_chart_data($page_path = '') {
     $ttfb_guest_with_query = [];
     $ttfb_logged_in_no_query = [];
     $ttfb_logged_in_with_query = [];
+    $fcp_count_guest_no_query = [];
+    $fcp_count_guest_with_query = [];
+    $fcp_count_logged_in_no_query = [];
+    $fcp_count_logged_in_with_query = [];
+    $ttfb_count_guest_no_query = [];
+    $ttfb_count_guest_with_query = [];
+    $ttfb_count_logged_in_no_query = [];
+    $ttfb_count_logged_in_with_query = [];
 
     foreach ($dates as $date) {
         $fcp_guest_no_query[] = $data_by_date[$date]['guest_no_query']['fcp'];
@@ -576,6 +735,14 @@ function wp_web_vitals_get_chart_data($page_path = '') {
         $ttfb_guest_with_query[] = $data_by_date[$date]['guest_with_query']['ttfb'];
         $ttfb_logged_in_no_query[] = $data_by_date[$date]['logged_in_no_query']['ttfb'];
         $ttfb_logged_in_with_query[] = $data_by_date[$date]['logged_in_with_query']['ttfb'];
+        $fcp_count_guest_no_query[] = $data_by_date[$date]['guest_no_query']['count'];
+        $fcp_count_guest_with_query[] = $data_by_date[$date]['guest_with_query']['count'];
+        $fcp_count_logged_in_no_query[] = $data_by_date[$date]['logged_in_no_query']['count'];
+        $fcp_count_logged_in_with_query[] = $data_by_date[$date]['logged_in_with_query']['count'];
+        $ttfb_count_guest_no_query[] = $data_by_date[$date]['guest_no_query']['count'];
+        $ttfb_count_guest_with_query[] = $data_by_date[$date]['guest_with_query']['count'];
+        $ttfb_count_logged_in_no_query[] = $data_by_date[$date]['logged_in_no_query']['count'];
+        $ttfb_count_logged_in_with_query[] = $data_by_date[$date]['logged_in_with_query']['count'];
     }
 
     return [
@@ -587,6 +754,14 @@ function wp_web_vitals_get_chart_data($page_path = '') {
         'ttfb_guest_no_query' => $ttfb_guest_no_query,
         'ttfb_guest_with_query' => $ttfb_guest_with_query,
         'ttfb_logged_in_no_query' => $ttfb_logged_in_no_query,
-        'ttfb_logged_in_with_query' => $ttfb_logged_in_with_query
+        'ttfb_logged_in_with_query' => $ttfb_logged_in_with_query,
+        'fcp_count_guest_no_query' => $fcp_count_guest_no_query,
+        'fcp_count_guest_with_query' => $fcp_count_guest_with_query,
+        'fcp_count_logged_in_no_query' => $fcp_count_logged_in_no_query,
+        'fcp_count_logged_in_with_query' => $fcp_count_logged_in_with_query,
+        'ttfb_count_guest_no_query' => $ttfb_count_guest_no_query,
+        'ttfb_count_guest_with_query' => $ttfb_count_guest_with_query,
+        'ttfb_count_logged_in_no_query' => $ttfb_count_logged_in_no_query,
+        'ttfb_count_logged_in_with_query' => $ttfb_count_logged_in_with_query
     ];
 }
