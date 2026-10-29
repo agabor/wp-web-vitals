@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WP Web Vitals
  * Description: Logs Time to First Byte (TTFB), URL, User Type, and User Agent information.
- * Version: 0.3.0
+ * Version: 0.3.1
  * Author: Gabor Angyal
  * Author URI: https://woodevops.com
  * License: GPL3
@@ -116,7 +116,7 @@ function wp_web_vitals_enqueue_script() {
         return;
     }
     
-    wp_enqueue_script('wp-web-vitals', plugin_dir_url(__FILE__) . 'wp-web-vitals.js', [], '0.2.3', true);
+    wp_enqueue_script('wp-web-vitals', plugin_dir_url(__FILE__) . 'wp-web-vitals.js', [], '0.3.1', true);
     wp_localize_script('wp-web-vitals', 'wpWebVitals', [
         'ajaxUrl' => admin_url('admin-ajax.php'),
         'nonce' => wp_create_nonce('wp-web-vitals-nonce')
@@ -279,8 +279,8 @@ function wp_web_vitals_enqueue_admin_assets(string $hook_suffix): void {
     }
 
     wp_enqueue_script('chartjs', 'https://cdn.jsdelivr.net/npm/chart.js', [], '3.9.1', true);
-    wp_enqueue_style('wp-web-vitals-admin', plugin_dir_url(__FILE__) . 'admin/web-vitals-admin.css', [], '0.3.0');
-    wp_enqueue_script('wp-web-vitals-admin', plugin_dir_url(__FILE__) . 'admin/web-vitals-admin.js', ['chartjs'], '0.3.0', true);
+    wp_enqueue_style('wp-web-vitals-admin', plugin_dir_url(__FILE__) . 'admin/web-vitals-admin.css', [], '0.3.1');
+    wp_enqueue_script('wp-web-vitals-admin', plugin_dir_url(__FILE__) . 'admin/web-vitals-admin.js', ['chartjs'], '0.3.1', true);
 }
 
 add_action('admin_enqueue_scripts', 'wp_web_vitals_enqueue_admin_assets');

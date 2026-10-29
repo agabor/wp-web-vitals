@@ -43,8 +43,9 @@ function buildDatasets(chartData, metric) {
             label: series.label,
             data: chartData[style.dataPrefix + series.suffix],
             backgroundColor: `rgba(${color}, ${series.alpha})`,
-            borderColor: `rgba(${color}, 1)`,
-            borderWidth: 1
+            borderColor: `rgba(${color}, ${series.alpha})`,
+            fill: false,
+            borderWidth: 2
         };
     });
 }
@@ -97,7 +98,7 @@ function renderCharts(chartData) {
         const context = document.getElementById(METRICS[metric].canvasId).getContext('2d');
 
         new Chart(context, {
-            type: 'bar',
+            type: 'line',
             data: {
                 labels: chartData.dates,
                 datasets: buildDatasets(chartData, metric)
