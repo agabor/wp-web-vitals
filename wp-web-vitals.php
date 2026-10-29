@@ -2,40 +2,20 @@
 /**
  * Plugin Name: WP Web Vitals
  * Description: Logs Time to First Byte (TTFB), URL, User Type, and User Agent information.
- * Version: 0.2.3
+ * Version: 0.3.0
  * Author: Gabor Angyal
  * Author URI: https://woodevops.com
  * License: GPL3
  */
 
- /*
-    WP Web Vitals
-    Copyright (C) 2024  Code Sharp Kft.
-
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-*/
-
 if (!defined('ABSPATH')) {
     exit;
 }
 
-define('WP_WEB_VITALS_CHART_HEIGHT', 400);
-define('WP_WEB_VITALS_CHART_MAX_WIDTH', 1200);
-define('WP_WEB_VITALS_CHART_MARGIN_BOTTOM', 40);
 define('WP_WEB_VITALS_RETENTION_DAYS', 90);
 define('WP_WEB_VITALS_USER_TYPE_GUEST', 'guest');
 define('WP_WEB_VITALS_USER_TYPE_LOGGED_IN', 'logged_in');
+define('WP_WEB_VITALS_ADMIN_HOOK_SUFFIX', 'tools_page_web-vitals-averages');
 
 register_activation_hook(__FILE__, 'wp_web_vitals_create_table');
 register_activation_hook(__FILE__, 'wp_web_vitals_schedule_log_pruning');
@@ -293,6 +273,18 @@ function wp_web_vitals_admin_menu() {
     );
 }
 
+function wp_web_vitals_enqueue_admin_assets(string $hook_suffix): void {
+    if ($hook_suffix !== WP_WEB_VITALS_ADMIN_HOOK_SUFFIX) {
+        return;
+    }
+
+    wp_enqueue_script('chartjs', 'https://cdn.jsdelivr.net/npm/chart.js', [], '3.9.1', true);
+    wp_enqueue_style('wp-web-vitals-admin', plugin_dir_url(__FILE__) . 'admin/web-vitals-admin.css', [], '0.3.0');
+    wp_enqueue_script('wp-web-vitals-admin', plugin_dir_url(__FILE__) . 'admin/web-vitals-admin.js', ['chartjs'], '0.3.0', true);
+}
+
+add_action('admin_enqueue_scripts', 'wp_web_vitals_enqueue_admin_assets');
+
 function wp_web_vitals_get_pages_with_data() {
     global $wpdb;
     $logs_table = wp_web_vitals_table_name();
@@ -306,9 +298,8 @@ function wp_web_vitals_get_pages_with_data() {
     return $results;
 }
 
-function wp_web_vitals_admin_page() {
+function wp_web_vitals_admin_page(): void {
     global $wpdb;
-    $table_name = wp_web_vitals_table_name();
 
     $selected_page = isset($_GET['page_path']) ? sanitize_text_field($_GET['page_path']) : '';
 
@@ -318,255 +309,36 @@ function wp_web_vitals_admin_page() {
     
     $current_prefix = wp_web_vitals_get_path_prefix();
 
-    wp_enqueue_script('chartjs', 'https://cdn.jsdelivr.net/npm/chart.js', [], '3.9.1', true);
-    
-    $chart_height = WP_WEB_VITALS_CHART_HEIGHT;
-    $chart_max_width = WP_WEB_VITALS_CHART_MAX_WIDTH;
-
-    $inline_script = "
-        const chartData = " . wp_json_encode($chart_data) . ";
-
-        const fcpCtx = document.getElementById('fcpChart').getContext('2d');
-        new Chart(fcpCtx, {
-            type: 'bar',
-            data: {
-                labels: chartData.dates,
-                datasets: [
-                    {
-                        label: 'Guest (no query)',
-                        data: chartData.fcp_guest_no_query,
-                        backgroundColor: 'rgba(54, 162, 235, 0.7)',
-                        borderColor: 'rgba(54, 162, 235, 1)',
-                        borderWidth: 1
-                    },
-                    {
-                        label: 'Guest (with query)',
-                        data: chartData.fcp_guest_with_query,
-                        backgroundColor: 'rgba(54, 162, 235, 0.4)',
-                        borderColor: 'rgba(54, 162, 235, 1)',
-                        borderWidth: 1
-                    },
-                    {
-                        label: 'Logged-in (no query)',
-                        data: chartData.fcp_logged_in_no_query,
-                        backgroundColor: 'rgba(75, 192, 75, 0.7)',
-                        borderColor: 'rgba(75, 192, 75, 1)',
-                        borderWidth: 1
-                    },
-                    {
-                        label: 'Logged-in (with query)',
-                        data: chartData.fcp_logged_in_with_query,
-                        backgroundColor: 'rgba(75, 192, 75, 0.4)',
-                        borderColor: 'rgba(75, 192, 75, 1)',
-                        borderWidth: 1
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        title: {
-                            display: true,
-                            text: 'Milliseconds'
-                        }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'top'
-                    }
-                }
-            }
-        });
-
-        const ttfbCtx = document.getElementById('ttfbChart').getContext('2d');
-        new Chart(ttfbCtx, {
-            type: 'bar',
-            data: {
-                labels: chartData.dates,
-                datasets: [
-                    {
-                        label: 'Guest (no query)',
-                        data: chartData.ttfb_guest_no_query,
-                        backgroundColor: 'rgba(255, 159, 64, 0.7)',
-                        borderColor: 'rgba(255, 159, 64, 1)',
-                        borderWidth: 1
-                    },
-                    {
-                        label: 'Guest (with query)',
-                        data: chartData.ttfb_guest_with_query,
-                        backgroundColor: 'rgba(255, 159, 64, 0.4)',
-                        borderColor: 'rgba(255, 159, 64, 1)',
-                        borderWidth: 1
-                    },
-                    {
-                        label: 'Logged-in (no query)',
-                        data: chartData.ttfb_logged_in_no_query,
-                        backgroundColor: 'rgba(255, 99, 132, 0.7)',
-                        borderColor: 'rgba(255, 99, 132, 1)',
-                        borderWidth: 1
-                    },
-                    {
-                        label: 'Logged-in (with query)',
-                        data: chartData.ttfb_logged_in_with_query,
-                        backgroundColor: 'rgba(255, 99, 132, 0.4)',
-                        borderColor: 'rgba(255, 99, 132, 1)',
-                        borderWidth: 1
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        title: {
-                            display: true,
-                            text: 'Milliseconds'
-                        }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'top'
-                    }
-                }
-            }
-        });
-
-        const requestCountCtx = document.getElementById('requestCountChart').getContext('2d');
-        new Chart(requestCountCtx, {
-            type: 'bar',
-            data: {
-                labels: chartData.dates,
-                datasets: [
-                    {
-                        label: 'Guest (no query)',
-                        data: chartData.ttfb_count_guest_no_query,
-                        backgroundColor: 'rgba(155, 89, 182, 0.7)',
-                        borderColor: 'rgba(155, 89, 182, 1)',
-                        borderWidth: 1
-                    },
-                    {
-                        label: 'Guest (with query)',
-                        data: chartData.ttfb_count_guest_with_query,
-                        backgroundColor: 'rgba(155, 89, 182, 0.4)',
-                        borderColor: 'rgba(155, 89, 182, 1)',
-                        borderWidth: 1
-                    },
-                    {
-                        label: 'Logged-in (no query)',
-                        data: chartData.ttfb_count_logged_in_no_query,
-                        backgroundColor: 'rgba(52, 152, 219, 0.7)',
-                        borderColor: 'rgba(52, 152, 219, 1)',
-                        borderWidth: 1
-                    },
-                    {
-                        label: 'Logged-in (with query)',
-                        data: chartData.ttfb_count_logged_in_with_query,
-                        backgroundColor: 'rgba(52, 152, 219, 0.4)',
-                        borderColor: 'rgba(52, 152, 219, 1)',
-                        borderWidth: 1
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            stepSize: 1
-                        },
-                        title: {
-                            display: true,
-                            text: 'Request Count'
-                        }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'top'
-                    }
-                }
-            }
-        });
-    ";
-    
-    wp_add_inline_script('chartjs', $inline_script);
-    
-    $chart_margin = WP_WEB_VITALS_CHART_MARGIN_BOTTOM;
-    $chart_container_style = "max-width: {$chart_max_width}px; margin-bottom: {$chart_margin}px; margin-left: auto; margin-right: auto; position: relative; height: {$chart_height}px;";
-    $canvas_style = "max-width: 100%;";
-    
     ?>
-    <div class="wrap">
-        <h1>Web Vitals Analytics</h1>
+    <div class="wrap" id="wp-web-vitals-admin"
+         data-ajax-url="<?php echo esc_attr(admin_url('admin-ajax.php')); ?>"
+         data-settings-nonce="<?php echo esc_attr(wp_create_nonce('wp-web-vitals-admin-nonce')); ?>"
+         data-clean-nonce="<?php echo esc_attr(wp_create_nonce('wp-web-vitals-admin-nonce')); ?>"
+         data-chart-data="<?php echo esc_attr(wp_json_encode($chart_data)); ?>">
+        <h1 class="wp-heading-inline">Web Vitals Analytics</h1>
 
-        <div style="margin-bottom: 30px; padding: 15px; background-color: #f5f5f5; border-left: 4px solid #0073aa;">
-            <h2 style="margin-top: 0;">Settings</h2>
-            <label for="path-prefix-input" style="display: block; margin-bottom: 10px; font-weight: bold;">Path Prefix (optional):</label>
-            <input type="text" id="path-prefix-input" value="<?php echo esc_attr($current_prefix); ?>" placeholder="/blog" style="padding: 8px 12px; font-size: 14px; width: 300px; max-width: 100%; margin-right: 10px;">
-            <button id="save-settings-button" class="button button-primary" style="margin-bottom: 5px;">Save Settings</button>
-            <p style="margin-top: 10px; font-size: 12px; color: #666;">Leave empty to track all pages. Add a prefix like /blog to track only pages starting with that path.</p>
+        <div class="wp-web-vitals-actions">
+            <button id="clean-data-button" class="button button-secondary">Clean All Data</button>
         </div>
 
-        <script type="text/javascript">
-            document.getElementById('save-settings-button').addEventListener('click', function() {
-                var pathPrefix = document.getElementById('path-prefix-input').value.trim();
-                var xhr = new XMLHttpRequest();
-                xhr.open('POST', '<?php echo esc_js(admin_url('admin-ajax.php')); ?>', true);
-                xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-                xhr.onload = function() {
-                    if (xhr.status === 200) {
-                        var response = JSON.parse(xhr.responseText);
-                        if (response.success) {
-                            alert(response.data);
-                            location.reload();
-                        } else {
-                            alert('Error: ' + response.data);
-                        }
-                    }
-                };
-                xhr.send('action=save_webvitals_settings&path_prefix=' + encodeURIComponent(pathPrefix) + '&nonce=<?php echo esc_js(wp_create_nonce('wp-web-vitals-admin-nonce')); ?>');
-            });
-        </script>
+        <table class="form-table wp-web-vitals-settings">
+            <tr>
+                <th scope="row">
+                    <label for="path-prefix-input">Path prefix</label>
+                </th>
+                <td>
+                    <input type="text" id="path-prefix-input" class="regular-text" value="<?php echo esc_attr($current_prefix); ?>" placeholder="/blog">
+                    <p class="description">Leave empty to track all pages. Add a prefix like /blog to track only pages starting with that path.</p>
+                    <p>
+                        <button id="save-settings-button" class="button button-primary">Save Settings</button>
+                    </p>
+                </td>
+            </tr>
+        </table>
 
-        <button id="clean-data-button" class="button button-secondary" style="margin-bottom: 20px;">Clean All Data</button>
-
-        <script type="text/javascript">
-            document.getElementById('clean-data-button').addEventListener('click', function() {
-                if (confirm('Are you sure you want to delete all data? This action cannot be undone.')) {
-                    var xhr = new XMLHttpRequest();
-                    xhr.open('POST', '<?php echo esc_js(admin_url('admin-ajax.php')); ?>', true);
-                    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-                    xhr.onload = function() {
-                        if (xhr.status === 200) {
-                            var response = JSON.parse(xhr.responseText);
-                            if (response.success) {
-                                alert(response.data);
-                                location.reload();
-                            } else {
-                                alert('Error: ' + response.data);
-                            }
-                        }
-                    };
-                    xhr.send('action=clean_webvitals_data&nonce=<?php echo esc_js(wp_create_nonce('wp-web-vitals-admin-nonce')); ?>');
-                }
-            });
-        </script>
-
-        <div style="margin-bottom: 30px;">
-            <label for="page-select" style="font-weight: bold; margin-right: 10px;">Select Page:</label>
-            <select id="page-select" style="padding: 5px 10px; font-size: 14px;">
+        <div class="wp-web-vitals-page-filter">
+            <label for="page-select">Select Page:</label>
+            <select id="page-select">
                 <option value="">All Pages</option>
                 <?php foreach ($pages as $page) : ?>
                     <option value="<?php echo esc_attr($page->path); ?>" <?php selected($selected_page, $page->path); ?>>
@@ -576,32 +348,27 @@ function wp_web_vitals_admin_page() {
             </select>
         </div>
 
-        <script type="text/javascript">
-            document.getElementById('page-select').addEventListener('change', function() {
-                const pagePath = this.value;
-                const url = new URL(window.location);
-                if (pagePath) {
-                    url.searchParams.set('page_path', pagePath);
-                } else {
-                    url.searchParams.delete('page_path');
-                }
-                window.location.href = url.toString();
-            });
-        </script>
+        <div class="wp-web-vitals-charts">
+            <section class="card wp-web-vitals-chart">
+                <h2>First Contentful Paint (FCP) - Last <?php echo WP_WEB_VITALS_RETENTION_DAYS; ?> Days</h2>
+                <div class="wp-web-vitals-chart__canvas">
+                    <canvas id="fcp-chart"></canvas>
+                </div>
+            </section>
 
-        <div style="<?php echo esc_attr($chart_container_style); ?>">
-            <h2>First Contentful Paint (FCP) - Last <?php echo WP_WEB_VITALS_RETENTION_DAYS; ?> Days</h2>
-            <canvas id="fcpChart" style="<?php echo esc_attr($canvas_style); ?>"></canvas>
-        </div>
+            <section class="card wp-web-vitals-chart">
+                <h2>Time to First Byte (TTFB) - Last <?php echo WP_WEB_VITALS_RETENTION_DAYS; ?> Days</h2>
+                <div class="wp-web-vitals-chart__canvas">
+                    <canvas id="ttfb-chart"></canvas>
+                </div>
+            </section>
 
-        <div style="<?php echo esc_attr($chart_container_style); ?>">
-            <h2>Time to First Byte (TTFB) - Last <?php echo WP_WEB_VITALS_RETENTION_DAYS; ?> Days</h2>
-            <canvas id="ttfbChart" style="<?php echo esc_attr($canvas_style); ?>"></canvas>
-        </div>
-
-        <div style="<?php echo esc_attr($chart_container_style); ?>">
-            <h2>Request Count - Last <?php echo WP_WEB_VITALS_RETENTION_DAYS; ?> Days</h2>
-            <canvas id="requestCountChart" style="<?php echo esc_attr($canvas_style); ?>"></canvas>
+            <section class="card wp-web-vitals-chart">
+                <h2>Request Count - Last <?php echo WP_WEB_VITALS_RETENTION_DAYS; ?> Days</h2>
+                <div class="wp-web-vitals-chart__canvas">
+                    <canvas id="request-count-chart"></canvas>
+                </div>
+            </section>
         </div>
     </div>
     <?php

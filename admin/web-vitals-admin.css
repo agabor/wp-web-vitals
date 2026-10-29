@@ -1,0 +1,56 @@
+.wp-web-vitals-actions {
+    margin: 12px 0 20px;
+}
+
+.wp-web-vitals-settings {
+    margin-top: 0;
+}
+
+.wp-web-vitals-settings .regular-text {
+    max-width: 300px;
+    width: 100%;
+}
+
+.wp-web-vitals-page-filter {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 24px;
+    padding: 12px 16px;
+    background: #f0f0f1;
+    border-left: 4px solid #2271b1;
+}
+
+.wp-web-vitals-charts {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+}
+
+@media (min-width: 960px) {
+    .wp-web-vitals-charts {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+.wp-web-vitals-chart {
+    margin: 0;
+    padding: 16px 20px;
+    border: 1px solid #c3c4c7;
+}
+
+.wp-web-vitals-chart h2 {
+    margin-top: 0;
+    font-size: 1.3em;
+}
+
+.wp-web-vitals-chart__canvas {
+    position: relative;
+    height: 400px;
+}
+
+.wp-web-vitals-chart__canvas canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+}
