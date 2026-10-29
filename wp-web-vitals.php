@@ -34,6 +34,8 @@ define('WP_WEB_VITALS_CHART_HEIGHT', 400);
 define('WP_WEB_VITALS_CHART_MAX_WIDTH', 1200);
 define('WP_WEB_VITALS_CHART_MARGIN_BOTTOM', 40);
 define('WP_WEB_VITALS_RETENTION_DAYS', 90);
+define('WP_WEB_VITALS_USER_TYPE_GUEST', 'guest');
+define('WP_WEB_VITALS_USER_TYPE_LOGGED_IN', 'logged_in');
 
 register_activation_hook(__FILE__, 'wp_web_vitals_create_table');
 register_activation_hook(__FILE__, 'wp_web_vitals_schedule_log_pruning');
@@ -71,7 +73,7 @@ function wp_web_vitals_create_table() {
     }
 }
 
-function wp_web_vitals_delete_table() {
+function wp_web_vitals_delete_table(): void {
     global $wpdb;
     $table_name = wp_web_vitals_table_name();
     $sql = "DROP TABLE IF EXISTS $table_name;";
@@ -108,7 +110,6 @@ function wp_web_vitals_unschedule_log_pruning(): void {
     wp_clear_scheduled_hook('wp_web_vitals_prune_logs');
 }
 
-register_deactivation_hook(__FILE__, 'wp_web_vitals_delete_table');
 register_deactivation_hook(__FILE__, 'wp_web_vitals_unschedule_log_pruning');
 
 add_action('wp_web_vitals_prune_logs', 'wp_web_vitals_delete_expired_logs');
@@ -161,17 +162,33 @@ function wp_web_vitals_user_role_allowed($role) {
     return false;
 }
 
+function wp_web_vitals_resolve_user_type(): string {
+    if (is_user_logged_in()) {
+        return WP_WEB_VITALS_USER_TYPE_LOGGED_IN;
+    }
+
+    return WP_WEB_VITALS_USER_TYPE_GUEST;
+}
+
+function wp_web_vitals_is_same_host(string $url, string $site_host): bool {
+    return wp_parse_url($url, PHP_URL_HOST) === $site_host;
+}
+
 function wp_web_vitals_log_webvitals() {
     check_ajax_referer('wp-web-vitals-nonce', 'nonce');
 
     $ttfb = isset($_POST['ttfb']) ? floatval($_POST['ttfb']) : -1;
     $fcp = isset($_POST['fcp']) ? floatval($_POST['fcp']) : -1;
     $measurement_seconds = isset($_POST['measurementSeconds']) ? floatval($_POST['measurementSeconds']) : 0;
-    $user_type = isset($_POST['userType']) ? sanitize_text_field($_POST['userType']) : '';
+    $user_type = wp_web_vitals_resolve_user_type();
     $url = isset($_POST['url']) ? sanitize_text_field($_POST['url']) : '';
 
     if (empty($url)) {
         wp_send_json_error('Invalid data received.');
+    }
+
+    if (!wp_web_vitals_is_same_host($url, wp_parse_url(home_url(), PHP_URL_HOST))) {
+        wp_send_json_error('URL does not belong to this site.');
     }
 
     $prefix = wp_web_vitals_get_path_prefix();
@@ -186,11 +203,8 @@ function wp_web_vitals_log_webvitals() {
         wp_send_json_error('At least one measurement (TTFB or FCP) must be available.');
     }
 
-    if ($user_type === 'logged_in') {
+    if ($user_type === WP_WEB_VITALS_USER_TYPE_LOGGED_IN) {
         $current_user = wp_get_current_user();
-        if ($current_user->ID === 0) {
-            wp_send_json_success('User not authenticated.');
-        }
 
         $user_roles = $current_user->roles;
         $allowed = false;
@@ -593,22 +607,117 @@ function wp_web_vitals_admin_page() {
     <?php
 }
 
-function wp_web_vitals_calculate_median($values_string) {
-    if (empty($values_string)) {
+function wp_web_vitals_calculate_median(array $values): ?float {
+    if (empty($values)) {
         return null;
     }
+
+    $sorted = $values;
+    sort($sorted);
     
-    $values = array_map('floatval', explode(',', $values_string));
-    sort($values);
-    
-    $count = count($values);
-    $mid = floor(($count - 1) / 2);
+    $count = count($sorted);
+    $mid = intdiv($count - 1, 2);
     
     if ($count % 2) {
-        return round($values[$mid], 2);
+        return round($sorted[$mid], 2);
     }
     
-    return round(($values[$mid] + $values[$mid + 1]) / 2, 2);
+    return round(($sorted[$mid] + $sorted[$mid + 1]) / 2, 2);
+}
+
+function wp_web_vitals_chart_bucket(string $user_type, string $has_query): ?string {
+    // Unknown values are dropped rather than becoming array keys in the chart data.
+    if ($has_query !== 'no_query' && $has_query !== 'with_query') {
+        return null;
+    }
+
+    $with_query = $has_query === 'with_query';
+
+    if ($user_type === WP_WEB_VITALS_USER_TYPE_GUEST) {
+        return $with_query ? 'guest_with_query' : 'guest_no_query';
+    }
+
+    if ($user_type === WP_WEB_VITALS_USER_TYPE_LOGGED_IN) {
+        return $with_query ? 'logged_in_with_query' : 'logged_in_no_query';
+    }
+
+    return null;
+}
+
+function wp_web_vitals_group_chart_rows(array $rows): array {
+    $cells = [];
+
+    foreach ($rows as $row) {
+        $bucket = wp_web_vitals_chart_bucket($row['user_type'], $row['has_query']);
+        if ($bucket === null) {
+            continue;
+        }
+
+        $date = $row['date'];
+        if (!isset($cells[$date][$bucket])) {
+            $cells[$date][$bucket] = ['fcp' => [], 'ttfb' => [], 'count' => 0];
+        }
+
+        if ($row['fcp'] >= 0) {
+            $cells[$date][$bucket]['fcp'][] = $row['fcp'];
+        }
+        if ($row['ttfb'] >= 0) {
+            $cells[$date][$bucket]['ttfb'][] = $row['ttfb'];
+        }
+        $cells[$date][$bucket]['count']++;
+    }
+
+    return $cells;
+}
+
+function wp_web_vitals_series(array $summary, array $dates, string $bucket, string $field): array {
+    $series = [];
+
+    foreach ($dates as $date) {
+        $series[] = $summary[$date][$bucket][$field];
+    }
+
+    return $series;
+}
+
+/**
+ * @param array<int, array{date: string, user_type: string, has_query: string, fcp: float, ttfb: float}> $rows
+ */
+function wp_web_vitals_build_chart_data(array $rows): array {
+    $cells = wp_web_vitals_group_chart_rows($rows);
+
+    $dates = array_keys($cells);
+    rsort($dates);
+
+    $buckets = ['guest_no_query', 'guest_with_query', 'logged_in_no_query', 'logged_in_with_query'];
+
+    $summary = [];
+    foreach ($dates as $date) {
+        foreach ($buckets as $bucket) {
+            $cell = $cells[$date][$bucket] ?? ['fcp' => [], 'ttfb' => [], 'count' => 0];
+            $summary[$date][$bucket] = [
+                'fcp' => wp_web_vitals_calculate_median($cell['fcp']),
+                'ttfb' => wp_web_vitals_calculate_median($cell['ttfb']),
+                'count' => $cell['count']
+            ];
+        }
+    }
+
+    return [
+        'dates' => $dates,
+        'fcp_guest_no_query' => wp_web_vitals_series($summary, $dates, 'guest_no_query', 'fcp'),
+        'fcp_guest_with_query' => wp_web_vitals_series($summary, $dates, 'guest_with_query', 'fcp'),
+        'fcp_logged_in_no_query' => wp_web_vitals_series($summary, $dates, 'logged_in_no_query', 'fcp'),
+        'fcp_logged_in_with_query' => wp_web_vitals_series($summary, $dates, 'logged_in_with_query', 'fcp'),
+        'ttfb_guest_no_query' => wp_web_vitals_series($summary, $dates, 'guest_no_query', 'ttfb'),
+        'ttfb_guest_with_query' => wp_web_vitals_series($summary, $dates, 'guest_with_query', 'ttfb'),
+        'ttfb_logged_in_no_query' => wp_web_vitals_series($summary, $dates, 'logged_in_no_query', 'ttfb'),
+        'ttfb_logged_in_with_query' => wp_web_vitals_series($summary, $dates, 'logged_in_with_query', 'ttfb'),
+        'ttfb_count_guest_no_query' => wp_web_vitals_series($summary, $dates, 'guest_no_query', 'count'),
+        'ttfb_count_guest_with_query' => wp_web_vitals_series($summary, $dates, 'guest_with_query', 'count'),
+        'ttfb_count_logged_in_no_query' => wp_web_vitals_series($summary, $dates, 'logged_in_no_query', 'count'),
+        'ttfb_count_logged_in_with_query' => wp_web_vitals_series($summary, $dates, 'logged_in_with_query', 'count')
+    ];
 }
 
 function wp_web_vitals_get_chart_data($page_path = '') {
@@ -621,14 +730,11 @@ function wp_web_vitals_get_chart_data($page_path = '') {
                 DATE(created_at) as date,
                 user_type,
                 CASE WHEN url LIKE '%?%' THEN 'with_query' ELSE 'no_query' END as has_query,
-                GROUP_CONCAT(CASE WHEN fcp >= 0 THEN fcp END ORDER BY CASE WHEN fcp >= 0 THEN fcp END SEPARATOR ',') as fcp_values,
-                GROUP_CONCAT(CASE WHEN ttfb >= 0 THEN ttfb END ORDER BY CASE WHEN ttfb >= 0 THEN ttfb END SEPARATOR ',') as ttfb_values,
-                COUNT(*) as request_count
+                fcp,
+                ttfb
             FROM $table_name
             WHERE created_at >= DATE_SUB(NOW(), INTERVAL %d DAY)
             AND path = %s
-            GROUP BY DATE(created_at), user_type, has_query
-            ORDER BY date DESC
         ", WP_WEB_VITALS_RETENTION_DAYS, $page_path);
     } else {
         $sql = "
@@ -636,84 +742,25 @@ function wp_web_vitals_get_chart_data($page_path = '') {
                 DATE(created_at) as date,
                 user_type,
                 CASE WHEN url LIKE '%?%' THEN 'with_query' ELSE 'no_query' END as has_query,
-                GROUP_CONCAT(CASE WHEN fcp >= 0 THEN fcp END ORDER BY CASE WHEN fcp >= 0 THEN fcp END SEPARATOR ',') as fcp_values,
-                GROUP_CONCAT(CASE WHEN ttfb >= 0 THEN ttfb END ORDER BY CASE WHEN ttfb >= 0 THEN ttfb END SEPARATOR ',') as ttfb_values,
-                COUNT(*) as request_count
+                fcp,
+                ttfb
             FROM $table_name
             WHERE created_at >= DATE_SUB(NOW(), INTERVAL " . WP_WEB_VITALS_RETENTION_DAYS . " DAY)
-            GROUP BY DATE(created_at), user_type, has_query
-            ORDER BY date DESC
         ";
     }
 
     $results = $wpdb->get_results($sql);
 
-    $dates_set = [];
-    $data_by_date = [];
-
-    foreach ($results as $row) {
-        $dates_set[$row->date] = true;
-        
-        if (!isset($data_by_date[$row->date])) {
-            $data_by_date[$row->date] = [
-                'guest_no_query' => ['fcp' => null, 'ttfb' => null, 'count' => 0],
-                'guest_with_query' => ['fcp' => null, 'ttfb' => null, 'count' => 0],
-                'logged_in_no_query' => ['fcp' => null, 'ttfb' => null, 'count' => 0],
-                'logged_in_with_query' => ['fcp' => null, 'ttfb' => null, 'count' => 0]
-            ];
-        }
-
-        $key = $row->user_type . '_' . $row->has_query;
-        
-        $data_by_date[$row->date][$key]['fcp'] = wp_web_vitals_calculate_median($row->fcp_values);
-        $data_by_date[$row->date][$key]['ttfb'] = wp_web_vitals_calculate_median($row->ttfb_values);
-        $data_by_date[$row->date][$key]['count'] = intval($row->request_count);
+    $rows = [];
+    foreach ($results as $result) {
+        $rows[] = [
+            'date' => $result->date,
+            'user_type' => $result->user_type,
+            'has_query' => $result->has_query,
+            'fcp' => floatval($result->fcp),
+            'ttfb' => floatval($result->ttfb)
+        ];
     }
 
-    $dates = array_keys($dates_set);
-    rsort($dates);
-
-    $fcp_guest_no_query = [];
-    $fcp_guest_with_query = [];
-    $fcp_logged_in_no_query = [];
-    $fcp_logged_in_with_query = [];
-    $ttfb_guest_no_query = [];
-    $ttfb_guest_with_query = [];
-    $ttfb_logged_in_no_query = [];
-    $ttfb_logged_in_with_query = [];
-    $ttfb_count_guest_no_query = [];
-    $ttfb_count_guest_with_query = [];
-    $ttfb_count_logged_in_no_query = [];
-    $ttfb_count_logged_in_with_query = [];
-
-    foreach ($dates as $date) {
-        $fcp_guest_no_query[] = $data_by_date[$date]['guest_no_query']['fcp'];
-        $fcp_guest_with_query[] = $data_by_date[$date]['guest_with_query']['fcp'];
-        $fcp_logged_in_no_query[] = $data_by_date[$date]['logged_in_no_query']['fcp'];
-        $fcp_logged_in_with_query[] = $data_by_date[$date]['logged_in_with_query']['fcp'];
-        $ttfb_guest_no_query[] = $data_by_date[$date]['guest_no_query']['ttfb'];
-        $ttfb_guest_with_query[] = $data_by_date[$date]['guest_with_query']['ttfb'];
-        $ttfb_logged_in_no_query[] = $data_by_date[$date]['logged_in_no_query']['ttfb'];
-        $ttfb_logged_in_with_query[] = $data_by_date[$date]['logged_in_with_query']['ttfb'];
-        $ttfb_count_guest_no_query[] = $data_by_date[$date]['guest_no_query']['count'];
-        $ttfb_count_guest_with_query[] = $data_by_date[$date]['guest_with_query']['count'];
-        $ttfb_count_logged_in_no_query[] = $data_by_date[$date]['logged_in_no_query']['count'];
-        $ttfb_count_logged_in_with_query[] = $data_by_date[$date]['logged_in_with_query']['count'];
-    }
-
-    return [
-        'dates' => $dates,
-        'fcp_guest_no_query' => $fcp_guest_no_query,
-        'fcp_guest_with_query' => $fcp_guest_with_query,
-        'fcp_logged_in_no_query' => $fcp_logged_in_no_query,
-        'fcp_logged_in_with_query' => $fcp_logged_in_with_query,
-        'ttfb_guest_no_query' => $ttfb_guest_no_query,
-        'ttfb_guest_with_query' => $ttfb_guest_with_query,
-        'ttfb_logged_in_no_query' => $ttfb_logged_in_no_query,
-        'ttfb_logged_in_with_query' => $ttfb_logged_in_with_query,
-        'ttfb_count_guest_no_query' => $ttfb_count_guest_no_query,
-        'ttfb_count_guest_with_query' => $ttfb_count_guest_with_query,
-        'ttfb_count_logged_in_no_query' => $ttfb_count_logged_in_no_query,
-        'ttfb_count_logged_in_with_query' => $ttfb_count_logged_in_with_query
-    ];
+    return wp_web_vitals_build_chart_data($rows);
 }

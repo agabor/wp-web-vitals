@@ -18,11 +18,6 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
         function logWebVitals() {
-            let userType = 'guest';
-            if (document.body.classList.contains('logged-in')) {
-                userType = 'logged_in';
-            }
-
             fetch(wpWebVitals.ajaxUrl, {
                 method: 'POST',
                 headers: {
@@ -31,7 +26,6 @@ document.addEventListener("DOMContentLoaded", function () {
                 body: new URLSearchParams({
                     ...measurements,
                     action: 'log_webvitals',
-                    userType: userType,
                     url: window.location.href,
                     nonce: wpWebVitals.nonce
                 })
