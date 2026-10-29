@@ -33,8 +33,10 @@ if (!defined('ABSPATH')) {
 define('WP_WEB_VITALS_CHART_HEIGHT', 400);
 define('WP_WEB_VITALS_CHART_MAX_WIDTH', 1200);
 define('WP_WEB_VITALS_CHART_MARGIN_BOTTOM', 40);
+define('WP_WEB_VITALS_RETENTION_DAYS', 90);
 
 register_activation_hook(__FILE__, 'wp_web_vitals_create_table');
+register_activation_hook(__FILE__, 'wp_web_vitals_schedule_log_pruning');
 
 function wp_web_vitals_table_name() {
     global $wpdb;
@@ -82,7 +84,34 @@ function wp_web_vitals_delete_table() {
     }
 }
 
+function wp_web_vitals_delete_expired_logs(): void {
+    global $wpdb;
+    $table_name = wp_web_vitals_table_name();
+    $sql = $wpdb->prepare(
+        "DELETE FROM $table_name WHERE created_at < DATE_SUB(NOW(), INTERVAL %d DAY);",
+        WP_WEB_VITALS_RETENTION_DAYS
+    );
+    $wpdb->query($sql);
+
+    if ($wpdb->last_error) {
+        error_log("Error deleting expired web vitals logs: " . $wpdb->last_error);
+    }
+}
+
+function wp_web_vitals_schedule_log_pruning(): void {
+    if (!wp_next_scheduled('wp_web_vitals_prune_logs')) {
+        wp_schedule_event(time(), 'daily', 'wp_web_vitals_prune_logs');
+    }
+}
+
+function wp_web_vitals_unschedule_log_pruning(): void {
+    wp_clear_scheduled_hook('wp_web_vitals_prune_logs');
+}
+
 register_deactivation_hook(__FILE__, 'wp_web_vitals_delete_table');
+register_deactivation_hook(__FILE__, 'wp_web_vitals_unschedule_log_pruning');
+
+add_action('wp_web_vitals_prune_logs', 'wp_web_vitals_delete_expired_logs');
 
 function wp_web_vitals_get_path_prefix() {
     return get_option('wp_web_vitals_path_prefix', '');
@@ -547,17 +576,17 @@ function wp_web_vitals_admin_page() {
         </script>
 
         <div style="<?php echo esc_attr($chart_container_style); ?>">
-            <h2>First Contentful Paint (FCP) - Last 30 Days</h2>
+            <h2>First Contentful Paint (FCP) - Last <?php echo WP_WEB_VITALS_RETENTION_DAYS; ?> Days</h2>
             <canvas id="fcpChart" style="<?php echo esc_attr($canvas_style); ?>"></canvas>
         </div>
 
         <div style="<?php echo esc_attr($chart_container_style); ?>">
-            <h2>Time to First Byte (TTFB) - Last 30 Days</h2>
+            <h2>Time to First Byte (TTFB) - Last <?php echo WP_WEB_VITALS_RETENTION_DAYS; ?> Days</h2>
             <canvas id="ttfbChart" style="<?php echo esc_attr($canvas_style); ?>"></canvas>
         </div>
 
         <div style="<?php echo esc_attr($chart_container_style); ?>">
-            <h2>Request Count - Last 30 Days</h2>
+            <h2>Request Count - Last <?php echo WP_WEB_VITALS_RETENTION_DAYS; ?> Days</h2>
             <canvas id="requestCountChart" style="<?php echo esc_attr($canvas_style); ?>"></canvas>
         </div>
     </div>
@@ -596,11 +625,11 @@ function wp_web_vitals_get_chart_data($page_path = '') {
                 GROUP_CONCAT(CASE WHEN ttfb >= 0 THEN ttfb END ORDER BY CASE WHEN ttfb >= 0 THEN ttfb END SEPARATOR ',') as ttfb_values,
                 COUNT(*) as request_count
             FROM $table_name
-            WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+            WHERE created_at >= DATE_SUB(NOW(), INTERVAL %d DAY)
             AND path = %s
             GROUP BY DATE(created_at), user_type, has_query
             ORDER BY date DESC
-        ", $page_path);
+        ", WP_WEB_VITALS_RETENTION_DAYS, $page_path);
     } else {
         $sql = "
             SELECT 
@@ -611,7 +640,7 @@ function wp_web_vitals_get_chart_data($page_path = '') {
                 GROUP_CONCAT(CASE WHEN ttfb >= 0 THEN ttfb END ORDER BY CASE WHEN ttfb >= 0 THEN ttfb END SEPARATOR ',') as ttfb_values,
                 COUNT(*) as request_count
             FROM $table_name
-            WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+            WHERE created_at >= DATE_SUB(NOW(), INTERVAL " . WP_WEB_VITALS_RETENTION_DAYS . " DAY)
             GROUP BY DATE(created_at), user_type, has_query
             ORDER BY date DESC
         ";
