@@ -4,7 +4,7 @@
  * Description: Logs Time to First Byte (TTFB), URL, User Type, and User Agent information.
  * Version: 0.3.1
  * Author: Gabor Angyal
- * Author URI: https://woodevops.com
+ * Author URI: https://webshop.tech
  * License: GPL3
  */
 
